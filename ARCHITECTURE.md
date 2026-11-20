@@ -13,7 +13,7 @@ Deterministic AI execution · verifiable computation · composability · decentr
 | Oracle | Chainlink Data Feeds / Functions / Automation | resolve markets from real-world data | `src/oracle/ChainlinkOracleAdapter.sol` |
 | Relational index | Tableland | queryable markets, predictions, positions, proposals | `packages/shared/tableland` |
 | Permanent storage | Arweave | immutable question text, model output, evidence, disputes | `*_arweave_tx` columns |
-| Private markets | Lit Protocol | token-gated / encrypted markets and alpha | env-wired, client TODO |
+| Private markets | Lit Protocol | token-gated / encrypted markets and alpha | `packages/lit` (ACC builders + gated encryption; archives via the Arweave worker) |
 | GPU compute | Akash | scalable inference/training for the non-deterministic path | `packages/inference` (stdlib server + SDL); `RemoteEmbedder` plugs into the generator |
 | Interface | Next.js + viem + wagmi | terminal UI, wallet, dashboards | `packages/frontend` |
 

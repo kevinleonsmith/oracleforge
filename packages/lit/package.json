@@ -1,0 +1,21 @@
+{
+  "name": "@oracleforge/lit",
+  "version": "0.1.0",
+  "description": "OracleForge Lit Protocol integration — token-gated / encrypted private markets",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "node --test --experimental-strip-types test/conditions.test.ts test/client.test.ts",
+    "demo": "node --experimental-strip-types scripts/demo.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependenciesMeta": {
+    "@lit-protocol/lit-node-client": { "optional": true },
+    "@lit-protocol/encryption": { "optional": true }
+  },
+  "peerDependencies": {
+    "@lit-protocol/lit-node-client": "^7.0.0",
+    "@lit-protocol/encryption": "^7.0.0"
+  }
+}
