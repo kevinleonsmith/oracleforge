@@ -43,6 +43,15 @@ for _pkg in ("ai-market-generator", "relayer", "resolver", "archiver"):
 
 FEE_BPS = 200  # mirrors MarketEngine.feeBps (2.0%)
 
+# The reference trade scenario, shared by the pure pipeline and the anvil devnet
+# so both settle the identical positions: (account, "YES"|"NO", stake).
+DEMO_POSITIONS: list[tuple[str, str, int]] = [
+    ("0xAlice", "YES", 600),
+    ("0xBob", "YES", 400),
+    ("0xCarol", "NO", 500),
+    ("0xDave", "NO", 300),
+]
+
 
 # --------------------------------------------------------------------------- #
 # Stage 3 — parimutuel settlement, a byte-for-byte port of MarketEngine.claim  #
@@ -157,13 +166,7 @@ def run_pipeline(now_ts: int = 1_737_010_000, outcome_yes: bool = True) -> Pipel
     committed_bps = relay_result.ai_prob_bps
 
     # 3) TRADE + SETTLE (parimutuel, contract-exact) ------------------------
-    positions = [
-        ("0xAlice", "YES", 600),
-        ("0xBob", "YES", 400),
-        ("0xCarol", "NO", 500),
-        ("0xDave", "NO", 300),
-    ]
-    settlement = settle(positions, outcome_yes=outcome_yes)
+    settlement = settle(DEMO_POSITIONS, outcome_yes=outcome_yes)
 
     # 4) RESOLVE (watcher pokes resolve(), emits an OracleReport) ------------
     from oracleforge_resolver.chain import DryRunResolver

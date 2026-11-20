@@ -14,6 +14,17 @@ npm run e2e          # run the pipeline as a demo (prints each stage + checks)
 npm run test:e2e     # run it as assertions (part of `npm test`)
 ```
 
+Two levels:
+
+| | Settlement checked against | Needs | In `npm test`? |
+|-|----------------------------|-------|----------------|
+| **pure** (`pipeline.py`, here) | a Python **port** of `MarketEngine.claim` | stdlib only | yes |
+| **devnet** ([`anvil/`](anvil/)) | the **real** contract on a live anvil node | Foundry toolchain | no — own CI job, skips if absent |
+
+The devnet variant proves the port itself is faithful: it deploys the actual
+Solidity and asserts on-chain payouts equal `settle(...)` to the wei. See
+[`anvil/README.md`](anvil/README.md).
+
 ## What it proves across the package boundary
 
 | Check | Guarantee |

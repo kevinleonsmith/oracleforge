@@ -25,6 +25,7 @@ Akash embeddings ─▶ Cartesi deterministic forecast ─▶ relayer createMark
 - **Run every test:** `npm test` (contracts via Foundry, the rest via Python `unittest` / `node --test`)
 - **Run the pipeline dry (no chain/network):** `npm run ai`, `npm run relay`, `npm run resolve`, `npm run archive`, `npm run lit`, `npm run inference`
 - **Run the whole thing end to end:** `npm run e2e` (generate → relay → trade → resolve → archive, with boundary checks)
+- **Prove settlement on a real node:** `npm run devnet` (boots anvil, deploys the actual contracts, checks on-chain payouts == the Python port)
 
 ## Packages
 
@@ -40,7 +41,7 @@ Akash embeddings ─▶ Cartesi deterministic forecast ─▶ relayer createMark
 | `lit` | token-gated / encrypted private markets (Lit Protocol) | TypeScript | **14** | `npm run lit` |
 | `frontend` | Next.js terminal UI; live Tableland + viem reads, switchable with mock | TypeScript | **10** | `npm run dev` |
 | `shared` | Tableland SQL schema + shared TypeScript types | SQL + TS | — | — |
-| `integration` | end-to-end thread across every worker + contract-exact settlement | Python | **8** | `npm run e2e` |
+| `integration` | end-to-end thread across every worker + contract-exact settlement; **anvil devnet** parity vs the real `MarketEngine` | Python + Foundry | **8** (+2 devnet) | `npm run e2e` · `npm run devnet` |
 | | | | **111** | `npm test` |
 
 ## The determinism boundary (the key design decision)
@@ -77,6 +78,10 @@ A proof of this runs in CI: the relayer and inference tests assert the committed
   from relay through resolve to archive, the committed forecast equal to the
   generator's, parimutuel settlement value-conserving against a contract-exact
   port of `MarketEngine.claim`, and stable content-addressed dedupe.
+- An **anvil devnet** (`integration/anvil/`) that removes that port from the trust
+  path: it boots a real node, deploys the **actual** Solidity, runs the full
+  on-chain lifecycle (create → position → resolve → claim) via `cast`, and asserts
+  the real `MarketEngine` payouts and fee equal the Python `settle()` to the wei.
 
 **Coded behind interfaces, NOT exercised** (needs infrastructure/credentials):
 
@@ -100,8 +105,9 @@ every PR, as two jobs:
 
 | Check | What it does |
 |-------|--------------|
-| `all tests` | Node 22 + Python 3.11 + Foundry + PyYAML, runs `npm test` (all 103 tests) |
+| `all tests` | Node 22 + Python 3.11 + Foundry + PyYAML, runs `npm test` (all 111 tests) |
 | `frontend build` | `npm install` + `next build` in `packages/frontend` — compiles the TSX and type-checks the whole app (the one thing the stdlib test suite can't cover) |
+| `anvil devnet parity` | boots a real anvil node, deploys the actual contracts, and asserts on-chain parimutuel payouts equal the Python `settle()` port (`npm run test:devnet`) |
 
 Current status (both checks, live):
 [![CI](https://github.com/kevinleonsmith/oracleforge/actions/workflows/ci.yml/badge.svg)](https://github.com/kevinleonsmith/oracleforge/actions/workflows/ci.yml)

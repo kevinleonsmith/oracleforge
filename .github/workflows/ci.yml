@@ -59,3 +59,19 @@ jobs:
         env:
           NEXT_TELEMETRY_DISABLED: "1"
         run: npm run build
+
+  devnet:
+    name: anvil devnet parity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # anvil + forge + cast — boots a real node, deploys the actual contracts,
+      # and asserts on-chain parimutuel payouts equal the Python settle() port.
+      - name: Set up Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+      - name: Devnet settlement parity
+        run: npm run test:devnet
