@@ -21,6 +21,7 @@ oracleforge/
 │  ├─ ai-market-generator/  Python — signals → cluster → confidence → forecast → proposal
 │  ├─ cartesi/              Cartesi Rollups dApp — deterministic forecast in a RISC-V machine
 │  ├─ relayer/              Cartesi notices → createMarket on Gnosis (keccak + ABI, dry-run)
+│  ├─ resolver/             resolution watcher — pokes resolve() after close, archives outcomes
 │  ├─ shared/               Tableland SQL schema + shared TypeScript types
 │  └─ frontend/             Next.js 14 terminal UI (viem + wagmi + Tableland SDK)
 ├─ infra/                   deployment topology notes (Cartesi / Akash / Arweave / Lit)
@@ -71,8 +72,11 @@ From the repo root, `npm test` runs both the contract and AI test suites.
 `ChainlinkOracleAdapter.configure` decodes. **`packages/relayer`** closes the loop:
 it takes each proposal, obtains the committed forecast from the Cartesi notice,
 and submits `createMarket` on Gnosis as an authorized relayer (`npm run relay`
-runs this end-to-end with no chain). The frontend reads markets through
-`lib/api.ts` (mock today, Tableland + viem when live) using the shared types.
+runs this end-to-end with no chain). After markets close, **`packages/resolver`**
+pokes the permissionless `resolve()` once each oracle is ready and archives the
+outcome (`npm run resolve` runs a dry-run tick). The frontend reads markets
+through `lib/api.ts` (mock today, Tableland + viem when live) using the shared
+types.
 
 ## Deploy (Chiado testnet)
 
@@ -90,6 +94,7 @@ forge script script/Deploy.s.sol:Deploy \
 | AI generator pipeline | ✅ runs on stdlib, 9 passing tests |
 | Cartesi rollup packaging | ✅ machine image + rollup dApp, 9 passing handler tests (see `packages/cartesi`) |
 | Relayer (notices → createMarket) | ✅ keccak256 + ABI encoding + orchestration, 15 passing tests, runnable dry-run |
+| Resolution watcher (poke resolve + archive) | ✅ planner + orchestration, 13 passing tests, runnable dry-run |
 | Tableland schema + shared types | ✅ defined |
 | Frontend | ✅ scaffold on mock data (needs `npm install`) |
 | Akash / Arweave / Lit integrations | ⬜ interfaces + env wired, clients TODO |

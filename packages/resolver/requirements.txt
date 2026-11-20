@@ -1,0 +1,4 @@
+# Core watcher logic (planner, orchestration, dry-run) is stdlib-only.
+# Live operation adds:
+#   pip install -e ".[chain,tableland]"
+# which pulls web3>=6.15 (submit resolve) and requests>=2.31 (Tableland source).
