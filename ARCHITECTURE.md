@@ -14,7 +14,7 @@ Deterministic AI execution · verifiable computation · composability · decentr
 | Relational index | Tableland | queryable markets, predictions, positions, proposals | `packages/shared/tableland` |
 | Permanent storage | Arweave | immutable question text, model output, evidence, disputes | `*_arweave_tx` columns |
 | Private markets | Lit Protocol | token-gated / encrypted markets and alpha | env-wired, client TODO |
-| GPU compute | Akash | scalable inference/training for the non-deterministic path | env-wired, client TODO |
+| GPU compute | Akash | scalable inference/training for the non-deterministic path | `packages/inference` (stdlib server + SDL); `RemoteEmbedder` plugs into the generator |
 | Interface | Next.js + viem + wagmi | terminal UI, wallet, dashboards | `packages/frontend` |
 
 ## Determinism boundary (the important one)

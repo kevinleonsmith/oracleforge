@@ -1,0 +1,7 @@
+# Server + client are stdlib-only (http.server + urllib) — the service runs with
+# no installs and falls back to the deterministic HashingEmbedder.
+#
+# GPU model stack (in the Docker image, not needed to run the server locally):
+#   pip install -e ".[gpu]"      # torch + sentence-transformers + transformers
+# Regenerating the SDL needs PyYAML:
+#   pip install -e ".[sdl]"

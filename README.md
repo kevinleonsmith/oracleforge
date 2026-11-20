@@ -23,6 +23,7 @@ oracleforge/
 │  ├─ relayer/              Cartesi notices → createMarket on Gnosis (keccak + ABI, dry-run)
 │  ├─ resolver/             resolution watcher — pokes resolve() after close, archives outcomes
 │  ├─ archiver/             Arweave archival worker — permanent storage + Tableland write-back
+│  ├─ inference/            Akash GPU inference service (embeddings + drafting) + SDL
 │  ├─ shared/               Tableland SQL schema + shared TypeScript types
 │  └─ frontend/             Next.js 14 terminal UI (viem + wagmi + Tableland SDK)
 ├─ infra/                   deployment topology notes (Cartesi / Akash / Arweave / Lit)
@@ -104,6 +105,7 @@ forge script script/Deploy.s.sol:Deploy \
 | Arweave archival worker | ✅ content-addressed store + Tableland write-back, 12 passing tests, runnable dry-run |
 | Tableland schema + shared types | ✅ defined |
 | Frontend | ✅ live data wiring (Tableland + viem) switchable with mock; 10 passing pure-logic tests |
-| Akash GPU inference · Lit private markets | ⬜ interfaces + env wired, clients TODO |
+| Akash GPU inference service + SDL | ✅ stdlib server + urllib client + Akash SDL, 18 passing tests (runs generator over HTTP) |
+| Lit private markets | ⬜ interfaces + env wired, client TODO |
 | Live Arweave upload + signed Tableland writes | ⬜ interfaces defined (`TurboArweaveClient`, `RegistryTablelandWriter`) |
 | LMSR/AMM pricing, dispute module, staking | ⬜ roadmap |

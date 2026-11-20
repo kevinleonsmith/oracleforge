@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oracleforge-inference"
+version = "0.1.0"
+description = "OracleForge GPU inference service (embeddings + drafting) for Akash"
+requires-python = ">=3.10"
+# Server + client are stdlib-only. The GPU model stack is the deploy-time extra.
+dependencies = []
+
+[project.optional-dependencies]
+gpu = ["torch>=2.4", "sentence-transformers>=3.0", "transformers>=4.44"]
+sdl = ["pyyaml>=6.0"]
+dev = ["pyyaml>=6.0"]
+
+[project.scripts]
+oracleforge-inference = "oracleforge_inference.cli:main"
+
+[tool.setuptools]
+packages = ["oracleforge_inference"]

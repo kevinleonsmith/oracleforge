@@ -20,6 +20,9 @@ packages/cartesi/.cartesi/
 packages/archiver/.arweave-store/
 .arweave-store/
 
+# inference build context
+packages/inference/vendor/
+
 # python
 __pycache__/
 *.pyc
