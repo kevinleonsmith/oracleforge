@@ -97,6 +97,9 @@ every PR, as two jobs:
 Current status (both checks, live):
 [![CI](https://github.com/kevinleonsmith/oracleforge/actions/workflows/ci.yml/badge.svg)](https://github.com/kevinleonsmith/oracleforge/actions/workflows/ci.yml)
 
+A frozen snapshot of this badge (captured at **CI – passing**) is checked in at
+[`docs/ci-badge.svg`](docs/ci-badge.svg); the live badge above is the source of truth.
+
 The repo is **public**, so server-side **rulesets** are active on `master`:
 
 - `protect-master-history` — blocks force-pushes and branch deletion, **no bypass**
