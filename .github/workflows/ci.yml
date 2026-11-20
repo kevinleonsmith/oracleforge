@@ -37,3 +37,25 @@ jobs:
       # relayer, resolver, archiver, frontend, inference, lit (103 tests).
       - name: Run full test suite
         run: npm test
+
+  frontend-build:
+    name: frontend build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # Installs deps and runs `next build`, which compiles the TSX and
+      # type-checks the whole frontend — surfacing errors the stdlib test suite
+      # (pure logic only) cannot.
+      - name: Install dependencies
+        run: npm install
+      - name: Build (Next.js)
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: npm run build
