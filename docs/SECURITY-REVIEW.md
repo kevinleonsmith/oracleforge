@@ -194,6 +194,65 @@ to renounce emissions (an `EmissionsController`/timelock would hold the role in
 production), so it is left unguarded by design and documented with a test rather
 than "fixed." No cap, reentrancy, or authority gap found.
 
+## ChainlinkOracleAdapter — focused pass
+
+The adapter is the last core contract to get a direct audit and a dedicated suite
+(`ChainlinkOracleAdapter.t.sol`); it was previously exercised only through the
+engine's happy path. It compares a Chainlink feed's answer against a threshold with
+a `>=`/`<=` comparator, behind a staleness guard and an optional fallback feed.
+
+| # | Severity | Status | Summary |
+|---|----------|--------|---------|
+| O1 | Low | **Fixed** | `_read` accepted a negative feed answer (only zero was rejected) |
+| O2 | Low | **Fixed** | A fallback feed with different decimals silently mis-resolved |
+| O3 | Info | Documented | `maxStale == 0` disables the staleness check (foot-gun, by design) |
+| O4 | Info | Documented | Threshold-scaling, never-`Invalid`, at-threshold-`YES` semantics |
+
+### O1 — Negative feed answers were resolved, not rejected _(Low, fixed)_
+
+`_read` rejected `answer == 0` (uninitialized) but passed a **negative** answer
+through as healthy. A malfunctioning feed reporting `< 0` would then resolve a
+market — and under the `<=` comparator a negative answer reads **YES** against any
+positive threshold, so a glitch could settle a market the wrong way.
+
+- **Fix:** reject `answer <= 0` in `_read`. A non-positive answer is now treated as
+  unhealthy, so the adapter stays `Pending` (or tries the fallback) rather than
+  settling on bad data — the same fail-safe as a stale feed.
+- **Scope:** this intentionally restricts the adapter to **non-negative** data
+  feeds (prices), documented in the contract header; a market on a signed feed
+  needs a different adapter.
+- **Regression:** `test_negativeAnswer_isPending_notResolved`, `test_zeroAnswer_isPending`.
+
+### O2 — Fallback feed decimal mismatch _(Low, fixed)_
+
+The same raw `threshold` is compared against whichever feed resolves. If the
+`fallbackFeed` reported in different decimals than the primary (e.g. 6 vs 8), a
+fallback resolution would compare against a differently-scaled number and silently
+return the wrong outcome.
+
+- **Fix:** `configure` now requires `fallbackFeed.decimals() == feed.decimals()`
+  whenever a fallback is set, so the two are always directly comparable.
+- **Regression:** `test_configure_rejectsFallbackDecimalMismatch`,
+  `test_configure_acceptsMatchingFallbackDecimals`.
+
+### O3 — `maxStale == 0` disables staleness _(Info, documented)_
+
+A market configured with `maxStale == 0` accepts a feed answer of any age. This is
+the intended escape hatch for feeds without a reliable heartbeat, but it removes the
+only freshness guard, so it is a configuration foot-gun. Documented in the contract
+header and covered by `test_zeroMaxStale_ignoresAge`; the relayer should set a
+sensible `maxStale` for any heartbeat feed.
+
+### O4 — Scaling & outcome semantics _(Info, documented)_
+
+Three behaviours are correct-but-implicit and now documented in the contract header
+and pinned by tests: (a) `threshold` must be encoded in the feed's own decimals (the
+adapter does not rescale); (b) at exactly the threshold the condition reads `YES`
+under both comparators; (c) this adapter never returns `Invalid` — voiding a market
+is the engine's concern (e.g. a no-winner push, F1). The `onlyEngine` gating,
+one-time `initEngine`, and the stay-`Pending`-on-no-healthy-feed fail-safe were all
+verified sound.
+
 ## What was checked and found sound
 
 - **Reentrancy:** `claim()` and the invalid-refund path both follow CEI; the
