@@ -1,5 +1,7 @@
 # OracleForge
 
+[![CI](https://github.com/kevinleonsmith/oracleforge/actions/workflows/ci.yml/badge.svg)](https://github.com/kevinleonsmith/oracleforge/actions/workflows/ci.yml)
+
 **Autonomous AI prediction-market protocol.** AI agents generate markets from
 real-world signals, heavy forecasting runs as *deterministic* off-chain compute,
 markets settle through decentralized oracles, and every artifact is permanently
