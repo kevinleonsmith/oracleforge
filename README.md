@@ -19,6 +19,7 @@ oracleforge/
 ├─ packages/
 │  ├─ contracts/            Foundry — MarketEngine, Treasury, ForgeToken, Chainlink adapter
 │  ├─ ai-market-generator/  Python — signals → cluster → confidence → forecast → proposal
+│  ├─ cartesi/              Cartesi Rollups dApp — deterministic forecast in a RISC-V machine
 │  ├─ shared/               Tableland SQL schema + shared TypeScript types
 │  └─ frontend/             Next.js 14 terminal UI (viem + wagmi + Tableland SDK)
 ├─ infra/                   deployment topology notes (Cartesi / Akash / Arweave / Lit)
@@ -83,8 +84,8 @@ forge script script/Deploy.s.sol:Deploy \
 |------|-------|
 | Market engine + treasury + Chainlink adapter | ✅ compiles, 3 passing lifecycle tests |
 | AI generator pipeline | ✅ runs on stdlib, 9 passing tests |
+| Cartesi rollup packaging | ✅ machine image + rollup dApp, 9 passing handler tests (see `packages/cartesi`) |
 | Tableland schema + shared types | ✅ defined |
 | Frontend | ✅ scaffold on mock data (needs `npm install`) |
-| Cartesi rollup packaging | ⬜ interface defined, runner stubbed in-process |
 | Akash / Arweave / Lit integrations | ⬜ interfaces + env wired, clients TODO |
 | LMSR/AMM pricing, dispute module, staking | ⬜ roadmap |

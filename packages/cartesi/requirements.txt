@@ -1,0 +1,5 @@
+# dApp runtime deps inside the Cartesi Machine. The forecasting core
+# (oracleforge-ai) is installed separately from the vendored monorepo package and
+# itself needs nothing beyond the stdlib — keeping the machine image small and
+# the computation deterministic.
+requests==2.32.3

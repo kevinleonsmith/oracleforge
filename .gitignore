@@ -12,6 +12,10 @@ packages/contracts/cache/
 packages/contracts/broadcast/
 packages/contracts/lib/
 
+# cartesi
+packages/cartesi/vendor/
+packages/cartesi/.cartesi/
+
 # python
 __pycache__/
 *.pyc

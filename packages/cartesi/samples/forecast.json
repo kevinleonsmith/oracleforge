@@ -1,0 +1,7 @@
+{
+  "op": "forecast",
+  "question": "Will US CPI print below 2.6% YoY for the next release?",
+  "priors": [0.62],
+  "base_rate": 0.5,
+  "samples": 50000
+}

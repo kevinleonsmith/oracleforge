@@ -8,7 +8,7 @@ Deterministic AI execution · verifiable computation · composability · decentr
 | Layer | Tech | Responsibility | In this repo |
 |-------|------|----------------|--------------|
 | Market generation | Python, (LangChain/HF on Akash) | ingest signals → cluster → propose markets → forecast | `packages/ai-market-generator` |
-| Deterministic compute | Cartesi Machine | reproducible Monte Carlo / Bayesian forecasts, fraud-proofable | `oracleforge_ai/cartesi.py` (stubbed in-process) |
+| Deterministic compute | Cartesi Machine | reproducible Monte Carlo / Bayesian forecasts, fraud-proofable | `packages/cartesi` (machine image + rollup dApp); core in `oracleforge_ai/cartesi.py` |
 | Settlement | Solidity / Gnosis Chain | market lifecycle, parimutuel payout, fees, treasury | `packages/contracts` |
 | Oracle | Chainlink Data Feeds / Functions / Automation | resolve markets from real-world data | `src/oracle/ChainlinkOracleAdapter.sol` |
 | Relational index | Tableland | queryable markets, predictions, positions, proposals | `packages/shared/tableland` |
@@ -24,8 +24,9 @@ Two compute paths, split on purpose:
 - **Deterministic path (Cartesi):** anything whose result is committed on-chain —
   the initialized probability, resolution-relevant math. Fixed-seed PRNG, integer
   math where it matters, output byte-identical across nodes so a fraud proof can
-  replay it. See `cartesi.py` + `HashingEmbedder` (no model download inside the
-  machine).
+  replay it. Packaged as a Cartesi Rollups dApp in `packages/cartesi`: the
+  forecast runs inside the RISC-V machine and is emitted as a **notice**. Core in
+  `cartesi.py` + `HashingEmbedder` (no model download inside the machine).
 - **Non-deterministic path (Akash GPU):** heavy embeddings / LLM drafting that
   only *suggests* markets. Its output is an input to the deterministic path, never
   a settlement authority. Swapped in behind `TransformerEmbedder` / the LLM
