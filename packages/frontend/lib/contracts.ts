@@ -33,6 +33,12 @@ export const marketEngineAbi = [
     }],
   },
   { type: "function", name: "feeBps", stateMutability: "view", inputs: [], outputs: [{ name: "", type: "uint16" }] },
+  // --- optimistic resolution / dispute window ---
+  { type: "function", name: "challengeWindow", stateMutability: "view", inputs: [], outputs: [{ name: "", type: "uint64" }] },
+  { type: "function", name: "disputeBond", stateMutability: "view", inputs: [], outputs: [{ name: "", type: "uint256" }] },
+  { type: "function", name: "proposedAt", stateMutability: "view", inputs: [{ name: "", type: "bytes32" }], outputs: [{ name: "", type: "uint64" }] },
+  { type: "function", name: "proposedOutcome", stateMutability: "view", inputs: [{ name: "", type: "bytes32" }], outputs: [{ name: "", type: "uint8" }] },
+  { type: "function", name: "challengerOf", stateMutability: "view", inputs: [{ name: "", type: "bytes32" }], outputs: [{ name: "", type: "address" }] },
   {
     type: "function", name: "takePosition", stateMutability: "nonpayable",
     inputs: [
@@ -47,6 +53,9 @@ export const marketEngineAbi = [
     inputs: [{ name: "marketId", type: "bytes32" }],
     outputs: [{ name: "payout", type: "uint256" }],
   },
+  // dispute() posts `disputeBond` collateral; finalize() locks a proposal in
+  { type: "function", name: "dispute", stateMutability: "nonpayable", inputs: [{ name: "marketId", type: "bytes32" }], outputs: [] },
+  { type: "function", name: "finalize", stateMutability: "nonpayable", inputs: [{ name: "marketId", type: "bytes32" }], outputs: [] },
 ] as const;
 
 const STATUS = ["OPEN", "CLOSED", "RESOLVED", "INVALID"] as const;
@@ -82,5 +91,42 @@ export async function readMarketOnchain(marketId: `0x${string}`): Promise<Onchai
     };
   } catch {
     return null; // RPC hiccup -> caller keeps the indexed row
+  }
+}
+
+/** Raw on-chain fields the optimistic-resolution phase (lib/dispute) is derived
+ *  from. The engine-wide window/bond are market-independent; the per-market
+ *  fields only matter while a market sits in `CLOSED` (outcome proposed). */
+export interface OnchainDispute {
+  challengeWindow: number; // seconds; 0 => instant settlement, no dispute phase
+  disputeBond: string; // collateral a challenger must bond (base units)
+  proposedAt: number; // unix seconds the outcome was proposed
+  proposedOutcome: number; // IOracleAdapter.Outcome ordinal
+  challenger: string; // challengerOf; zero address if undisputed
+}
+
+/** Live read of a market's dispute-window state (engine window + per-market
+ *  proposal). Returns null off-chain or on an RPC hiccup. */
+export async function readDisputeState(marketId: `0x${string}`): Promise<OnchainDispute | null> {
+  if (!deployed) return null;
+  const engine = deployment.contracts.MarketEngine as Address;
+  try {
+    const [challengeWindow, disputeBond, proposedAt, proposedOutcome, challenger] =
+      await Promise.all([
+        publicClient.readContract({ address: engine, abi: marketEngineAbi, functionName: "challengeWindow" }),
+        publicClient.readContract({ address: engine, abi: marketEngineAbi, functionName: "disputeBond" }),
+        publicClient.readContract({ address: engine, abi: marketEngineAbi, functionName: "proposedAt", args: [marketId] }),
+        publicClient.readContract({ address: engine, abi: marketEngineAbi, functionName: "proposedOutcome", args: [marketId] }),
+        publicClient.readContract({ address: engine, abi: marketEngineAbi, functionName: "challengerOf", args: [marketId] }),
+      ]);
+    return {
+      challengeWindow: Number(challengeWindow),
+      disputeBond: disputeBond.toString(),
+      proposedAt: Number(proposedAt),
+      proposedOutcome: Number(proposedOutcome),
+      challenger: challenger as string,
+    };
+  } catch {
+    return null;
   }
 }

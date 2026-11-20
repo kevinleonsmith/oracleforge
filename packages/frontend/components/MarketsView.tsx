@@ -1,10 +1,50 @@
 "use client";
-import { useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import type { Market } from "@oracleforge/shared/types";
 import { formatCompact } from "@/lib/format";
 import { catColor, toUiMarket, type Position, type UiMarket } from "@/lib/ui";
+import type { ResolutionInput } from "@/lib/dispute";
+import { ChallengeStatus } from "./ChallengeStatus";
 import { ProbabilityChart } from "./ProbabilityChart";
 import { TradeDrawer } from "./TradeDrawer";
+
+const DEMO_CHALLENGER = "0x7F3aC9d2E1b84465A0cE9f21D8b7c0F3aE62d410";
+
+interface DisputeDemo {
+  id: string;
+  category: string;
+  question: string;
+  input: Omit<ResolutionInput, "now">;
+}
+
+// Client-only demo of the optimistic-resolution window — one market in each
+// phase. Seeded in an effect (never during SSR) so the live countdown anchors to
+// the viewer's clock with no hydration mismatch. The window/outcome fields are
+// exactly what readDisputeState() returns from the chain on a live deployment.
+function buildDisputeDemo(nowSec: number): DisputeDemo[] {
+  const WINDOW = 3600; // 1h challenge window
+  const base = { challengeWindow: WINDOW, status: "CLOSED" as const };
+  return [
+    {
+      id: "MKT-0x5C1A",
+      category: "CRYPTO",
+      question: "Did ETH close above $4,000 on the settlement date?",
+      input: { ...base, proposedAt: nowSec - 90, proposedOutcome: 1, challenger: "" }, // YES, in window
+    },
+    {
+      id: "MKT-0x9E22",
+      category: "MACRO",
+      question: "Was US unemployment at or below 4.0% for the reference month?",
+      input: { ...base, proposedAt: nowSec - 1800, proposedOutcome: 2, challenger: DEMO_CHALLENGER }, // NO, disputed
+    },
+    {
+      id: "MKT-0x3B07",
+      category: "GEO",
+      question: "Did the referendum pass with a majority of valid votes?",
+      input: { ...base, proposedAt: nowSec - 7200, proposedOutcome: 1, challenger: "" }, // YES, window elapsed
+    },
+  ];
+}
 
 const money = (n: number) => (n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : `$${n.toFixed(0)}`);
 const impliedYes = (m: UiMarket) => Math.round((m.yes / (m.yes + m.no || 1)) * 100);
@@ -35,8 +75,30 @@ export function MarketsView({ initialMarkets }: { initialMarkets: Market[] }) {
   const [positions, setPositions] = useState<Position[]>([]);
   const [selected, setSelected] = useState<UiMarket | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [disputes, setDisputes] = useState<DisputeDemo[]>([]);
   const series = useMemo(demoSeries, []);
   const confAvg = Math.round(CONFIDENCE.reduce((a, c) => a + c[1], 0) / CONFIDENCE.length);
+
+  // Seed the dispute demo client-side (anchors the countdown to the viewer's clock).
+  useEffect(() => setDisputes(buildDisputeDemo(Math.floor(Date.now() / 1000))), []);
+
+  function flash(msg: string) {
+    setToast(msg);
+    window.setTimeout(() => setToast(null), 2600);
+  }
+
+  function fileDispute(id: string) {
+    // Move the challenged market into the frozen "disputed" phase, as dispute() would.
+    setDisputes((ds) =>
+      ds.map((d) => (d.id === id ? { ...d, input: { ...d.input, challenger: DEMO_CHALLENGER } } : d))
+    );
+    flash(`Dispute filed · 100 ofUSD bond posted on ${id} — frozen for arbitration`);
+  }
+
+  function finalizeDispute(id: string) {
+    setDisputes((ds) => ds.filter((d) => d.id !== id));
+    flash(`Finalized ${id} — outcome locked, claims open`);
+  }
 
   function placePosition(p: Position) {
     setMarkets((ms) =>
@@ -149,6 +211,46 @@ export function MarketsView({ initialMarkets }: { initialMarkets: Market[] }) {
           </div>
         </div>
       </div>
+
+      {/* Optimistic resolution */}
+      {disputes.length > 0 && (
+        <div className="sec">
+          <div className="sec-head">
+            <div>
+              <div className="eyebrow">Settlement Layer</div>
+              <h2>Optimistic Resolution</h2>
+              <p>
+                When a market closes, the oracle&apos;s outcome is <em>proposed</em>, not final. It
+                must survive a challenge window — anyone can post a bond to dispute it, which freezes
+                the market for admin arbitration — before <code>finalize()</code> opens claims.
+              </p>
+            </div>
+            <div className="legend-live"><span className="dot live" /> {disputes.length} in review</div>
+          </div>
+          <div className="panel">
+            <div className="p-head"><div className="ico">⚖</div><h3>Proposed Outcomes</h3><span className="tag">challenge · dispute · finalize</span></div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
+              {disputes.map((d) => (
+                <div key={d.id} style={{ border: "1px solid var(--line)", borderRadius: 9, padding: 11, background: "var(--panel-2)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 8, flexWrap: "wrap" }}>
+                    <span className="cat" style={{ color: catColor(d.category), background: `color-mix(in srgb, ${catColor(d.category)} 12%, transparent)` }}>
+                      {d.category}
+                    </span>
+                    <span className="mono" style={{ fontSize: 10, color: "var(--faint)" }}>{d.id}</span>
+                    <span style={{ fontSize: 12.5 }}>{d.question}</span>
+                  </div>
+                  <ChallengeStatus
+                    input={d.input}
+                    bondLabel="100 ofUSD"
+                    onDispute={() => fileDispute(d.id)}
+                    onFinalize={() => finalizeDispute(d.id)}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <TradeDrawer market={selected} onClose={() => setSelected(null)} onPlace={placePosition} />
       {toast && <div id="toast" className="show" role="status">{toast}</div>}

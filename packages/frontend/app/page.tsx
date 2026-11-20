@@ -30,8 +30,9 @@ export default async function Home() {
       <Terminal markets={markets} proposals={proposals} />
 
       <p style={{ color: "var(--faint)", fontSize: 11, margin: "40px 0" }}>
-        Demonstration interface. Markets, balances, trades and votes are simulated sample data —
-        &ldquo;place position&rdquo; and &ldquo;vote&rdquo; are local demos; nothing is sent on-chain.
+        Demonstration interface. Markets, balances, trades, votes and disputes are simulated sample
+        data — &ldquo;place position&rdquo;, &ldquo;vote&rdquo;, &ldquo;dispute&rdquo; and
+        &ldquo;finalize&rdquo; are local demos; nothing is sent on-chain.
       </p>
     </main>
   );
