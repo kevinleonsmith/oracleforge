@@ -46,6 +46,8 @@ class MarketProposal:
     oracle: Optional[OracleSpec] = None
     evidence: list = field(default_factory=list)  # signal texts backing the market
     cluster_id: int = -1
+    priors: list = field(default_factory=list)  # forecast inputs — lets the Cartesi
+    # notice (and the relayer's stub) reproduce ai_prob_bps bit-for-bit
 
     @property
     def question_hash(self) -> str:

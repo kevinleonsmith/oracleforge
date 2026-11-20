@@ -1,0 +1,4 @@
+# Core relayer logic (keccak, ABI encoding, mapping, dry-run) is stdlib-only.
+# Live on-chain submission + GraphQL notice reading add:
+#   pip install -e ".[chain,graphql]"
+# which pulls web3>=6.15 and requests>=2.31 (pinned ranges in pyproject.toml).

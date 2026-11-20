@@ -14,8 +14,10 @@
     "test:contracts": "cd packages/contracts && forge test -vv",
     "test:ai": "cd packages/ai-market-generator && python3 -m unittest discover -s tests -t .",
     "test:cartesi": "cd packages/cartesi && python3 -m unittest discover -s tests -t .",
+    "test:relayer": "cd packages/relayer && python3 -m unittest discover -s tests -t .",
     "ai": "cd packages/ai-market-generator && python3 -m oracleforge_ai.cli --format table",
-    "test": "npm run test:contracts && npm run test:ai && npm run test:cartesi"
+    "relay": "cd packages/relayer && python3 -m oracleforge_relayer.cli --dry-run",
+    "test": "npm run test:contracts && npm run test:ai && npm run test:cartesi && npm run test:relayer"
   },
   "engines": { "node": ">=20" }
 }

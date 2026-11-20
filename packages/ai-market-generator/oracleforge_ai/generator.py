@@ -127,7 +127,8 @@ class MarketGenerator:
                 continue
 
             prior = self._signal_prior(cluster)
-            forecast = self.runner.forecast(question, [prior], base_rate=0.5)
+            priors = [prior]
+            forecast = self.runner.forecast(question, priors, base_rate=0.5)
 
             proposals.append(
                 MarketProposal(
@@ -140,6 +141,7 @@ class MarketGenerator:
                     oracle=rule["oracle"](),
                     evidence=[s.text for s in cluster.signals],
                     cluster_id=cluster.id,
+                    priors=priors,
                 )
             )
 

@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oracleforge-relayer"
+version = "0.1.0"
+description = "OracleForge relayer — Cartesi notices -> createMarket on Gnosis"
+requires-python = ">=3.10"
+# Core (mapping, keccak, abi, dry-run) is stdlib-only. Live submission adds web3;
+# the GraphQL notice reader adds requests.
+dependencies = []
+
+[project.optional-dependencies]
+chain = ["web3>=6.15"]
+graphql = ["requests>=2.31"]
+dev = []
+
+[project.scripts]
+oracleforge-relayer = "oracleforge_relayer.cli:main"
+
+[tool.setuptools]
+packages = ["oracleforge_relayer"]
