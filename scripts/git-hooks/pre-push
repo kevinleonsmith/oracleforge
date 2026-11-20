@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# OracleForge local branch guard — blocks force-push and deletion of master.
+#
+# This is a LOCAL safeguard for this clone only. GitHub free private repos cannot
+# enforce branch protection server-side (needs a public repo or GitHub Pro), so a
+# force-push from another machine or the web UI is NOT stopped by this. See
+# STATUS.md. Install into other clones with: scripts/install-git-hooks.sh
+#
+# A normal fast-forward push to master is allowed; only history-rewriting
+# (non-fast-forward) pushes and branch deletion are refused.
+set -euo pipefail
+
+protected="master"
+
+is_zero() { [ -z "${1//0/}" ]; } # true if an oid is all zeros (new/delete sentinel)
+
+while read -r _local_ref local_oid remote_ref remote_oid; do
+  branch="${remote_ref#refs/heads/}"
+  [ "$branch" = "$protected" ] || continue
+
+  if is_zero "$local_oid"; then
+    echo "pre-push: refusing to delete protected branch '$protected'." >&2
+    exit 1
+  fi
+
+  # If the branch already exists remotely, require the push to be a fast-forward
+  # (the remote tip must be an ancestor of what we are pushing).
+  if ! is_zero "$remote_oid"; then
+    if ! git merge-base --is-ancestor "$remote_oid" "$local_oid" 2>/dev/null; then
+      echo "pre-push: refusing non-fast-forward (force) push to '$protected'." >&2
+      echo "          integrate the remote changes (rebase/merge) instead of forcing." >&2
+      exit 1
+    fi
+  fi
+done
+
+exit 0

@@ -84,6 +84,17 @@ A proof of this runs in CI: the relayer and inference tests assert the committed
 | Lit network encryption | `lit/litClient.ts` (`RealLitClient`) | `@lit-protocol/*` + wallet |
 | Frontend build/render | `frontend/` | `npm install` + a deployment |
 
+## Branch protection
+
+Server-side branch protection (and rulesets) require a **public repo or GitHub
+Pro**; this repo is private on a free plan, so neither is available. As a stopgap,
+a **local** `pre-push` guard blocks force-pushes and deletion of `master` in this
+clone — it is not server-side, so it does not stop pushes from other machines or
+the web UI. Install it in another clone with `bash scripts/install-git-hooks.sh`.
+For real server-side protection, make the repo public or upgrade to Pro, then apply
+a Light ruleset (no force-push/deletion, CI `all tests` required, direct pushes
+allowed).
+
 ## Toolchains verified in this environment
 
 Node 22.14 · Python 3.11 · Foundry 1.5.1 · git. (No Docker, no `npm install`, no
