@@ -101,7 +101,7 @@ A proof of this runs in CI: the relayer and inference tests assert the committed
 ## CI & branch protection
 
 **CI** (`.github/workflows/ci.yml`) runs on every push to `master`/`main` and on
-every PR, as two jobs:
+every PR, as three jobs:
 
 | Check | What it does |
 |-------|--------------|
@@ -109,7 +109,7 @@ every PR, as two jobs:
 | `frontend build` | `npm install` + `next build` in `packages/frontend` — compiles the TSX and type-checks the whole app (the one thing the stdlib test suite can't cover) |
 | `anvil devnet parity` | boots a real anvil node, deploys the actual contracts, and asserts on-chain parimutuel payouts equal the Python `settle()` port (`npm run test:devnet`) |
 
-Current status (both checks, live):
+Current status (all checks, live):
 [![CI](https://github.com/kevinleonsmith/oracleforge/actions/workflows/ci.yml/badge.svg)](https://github.com/kevinleonsmith/oracleforge/actions/workflows/ci.yml)
 
 A frozen snapshot of this badge (captured at **CI – passing**) is checked in at
@@ -119,7 +119,7 @@ The repo is **public**, so server-side **rulesets** are active on `master`:
 
 - `protect-master-history` — blocks force-pushes and branch deletion, **no bypass**
   (applies to everyone, owner included).
-- `protect-master-ci` — requires both status checks above to pass, with
+- `protect-master-ci` — requires all three status checks above to pass, with
   `strict` up-to-date-before-merge; owner retains admin bypass for direct pushes.
 
 A **local** `pre-push` guard (`scripts/install-git-hooks.sh`) additionally blocks
