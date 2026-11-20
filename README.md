@@ -31,7 +31,8 @@ oracleforge/
 └─ .github/workflows/       CI (forge test + python unittest)
 ```
 
-See **[ARCHITECTURE.md](./ARCHITECTURE.md)** for the module map and data flow.
+See **[STATUS.md](./STATUS.md)** for the per-package build status (tested vs. live)
+and **[ARCHITECTURE.md](./ARCHITECTURE.md)** for the module map and data flow.
 
 ## Quick start
 
