@@ -131,6 +131,69 @@ guard; `takePosition` requires `Status.Open` so a resolved market can't be
 re-entered to mint stake. No guard needed today — but any move to a
 transfer-hooking collateral (ERC-777/-1363) would require revisiting this.
 
+## Treasury & ForgeToken — focused pass
+
+The first review scoped these two but only gave them the "found sound" summary
+below; this pass audits them directly and adds the dedicated suites they lacked
+(`Treasury.t.sol`, `ForgeToken.t.sol` — previously they were only exercised
+indirectly through MarketEngine).
+
+| # | Severity | Status | Summary |
+|---|----------|--------|---------|
+| T1 | Low | **Fixed** | Treasury had no two-step governor rotation (lost-key risk, mirrors F5) |
+| T2 | Info | **Fixed** | Treasury constructor missing a zero-address governor check (mirrors F6) |
+| T3 | Low | **Fixed** | Tokens sent to the Treasury outside `collectFee` were unrecoverable |
+| T4 | Info | Verified safe | ForgeToken cap + minter authority (zero-minter = renounce, by design) |
+
+### T1 — No two-step governor rotation _(Low, fixed)_
+
+`Treasury.setGovernor` was a single-step setter: one bad call handed governance to
+an unusable address, permanently bricking `allocate`/`reallocate` (the fees would
+be locked). Replaced with an `Ownable2Step`-style handover —
+`transferGovernor(newGovernor)` nominates, the nominee must `acceptGovernor()`, and
+`address(0)` cancels a pending nomination. Same shape as the engine's F5 fix, so
+both privileged roles rotate the same safe way. Regression: the governor-swap tests
+in `Treasury.t.sol` (two-step, only-governor nominate, only-nominee accept, cancel,
+powers-transferred / old-governor-locked).
+
+### T2 — Constructor missing zero-address check _(Info, fixed)_
+
+`new Treasury(address(0))` would have deployed an ungovernable treasury. Added
+`require(_governor != address(0))`; the two-step transfer closes the same gap on
+the mutable path (a zero nominee simply can't accept). Regression:
+`test_constructor_rejectsZeroGovernor`.
+
+### T3 — Direct transfers to the Treasury were unrecoverable _(Low, fixed)_
+
+The Treasury credits reserve buckets only inside `collectFee`. Tokens sent to it by
+a plain `transfer` (a donation, a misrouted payment, a fee path that forgot to call
+`collectFee`) were never credited to any bucket, so `allocate` — which requires a
+funded bucket — could never move them out. They'd sit in the contract permanently,
+exactly the stranded-funds class as engine finding F1.
+
+- **Fix:** the Treasury now keeps a `totalReserved[token]` running total alongside
+  the per-bucket `reserves`, maintained on every `collectFee`/`allocate`. A new
+  governor-gated `sweep(token, bucket)` credits the untracked balance
+  (`balanceOf(this) - totalReserved[token]`) into a chosen bucket, making donations
+  recoverable and giving a provable accounting invariant:
+  `sum(reserves[*][token]) == totalReserved[token] <= balanceOf(treasury)`.
+- **Regression:** `test_sweep_reconcilesDirectTransfers` (a direct deposit is swept
+  into a bucket and then successfully allocated out), plus the nothing-to-sweep and
+  only-governor guards.
+- **Assumption:** reconciliation treats the ERC-20 as non-fee-on-transfer (the same
+  trusted-collateral assumption as F7); a deflationary token could make
+  `totalReserved` exceed the real balance.
+
+### T4 — ForgeToken cap & minter authority _(Info, verified safe)_
+
+`mint` and the constructor genesis both enforce `totalSupply + amount <= MAX_SUPPLY`
+(100M), proven at the exact boundary (fills to the cap, one wei over reverts).
+`mint`/`setMinter` are `onlyMinter`; rotation transfers authority cleanly. Setting
+the minter to `address(0)` permanently disables minting — this is the intended way
+to renounce emissions (an `EmissionsController`/timelock would hold the role in
+production), so it is left unguarded by design and documented with a test rather
+than "fixed." No cap, reentrancy, or authority gap found.
+
 ## What was checked and found sound
 
 - **Reentrancy:** `claim()` and the invalid-refund path both follow CEI; the

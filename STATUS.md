@@ -3,7 +3,7 @@
 _Last updated: 2026-11-20_
 
 MVP of an autonomous AI prediction-market protocol on Gnosis Chain. **11 packages,
-154 passing tests** (incl. parimutuel settlement fuzzed for its invariants,
+178 passing tests** (incl. parimutuel settlement fuzzed for its invariants,
 stateful solvency proven across randomly-interleaved market histories, and a
 cross-package end-to-end that threads one market through every worker). Every
 off-chain worker, pure-logic layer, smart contract, and
@@ -33,7 +33,7 @@ Akash embeddings ─▶ Cartesi deterministic forecast ─▶ relayer createMark
 
 | Package | Purpose | Lang | Tests | Try it |
 |---------|---------|------|-------|--------|
-| `contracts` | MarketEngine (parimutuel), Treasury, ForgeToken, Chainlink oracle adapter; **fuzzed settlement + stateful solvency invariants**, **optimistic resolution with a bonded dispute window**, **two-step admin rotation** | Solidity (Foundry) | **28** | `npm run test:contracts` |
+| `contracts` | MarketEngine (parimutuel), Treasury, ForgeToken, Chainlink oracle adapter; **fuzzed settlement + stateful solvency invariants**, **optimistic resolution with a bonded dispute window**, **two-step admin/governor rotation**, **reviewed + directly tested Treasury/token** | Solidity (Foundry) | **52** | `npm run test:contracts` |
 | `ai-market-generator` | signals → cluster → confidence → deterministic forecast → proposal | Python | **9** | `npm run ai` |
 | `cartesi` | deterministic forecast packaged as a Cartesi Rollups machine (commits notices) | Python + Docker | **9** | `npm run test:cartesi` |
 | `relayer` | Cartesi notices → `createMarket` on Gnosis (keccak + ABI encoding) | Python | **15** | `npm run relay` |
@@ -44,7 +44,7 @@ Akash embeddings ─▶ Cartesi deterministic forecast ─▶ relayer createMark
 | `frontend` | Next.js terminal UI; live Tableland + viem reads, switchable with mock; **optimistic-resolution panel** (live challenge countdown, dispute/finalize) | TypeScript | **20** | `npm run dev` |
 | `shared` | Tableland SQL schema + shared TypeScript types | SQL + TS | — | — |
 | `integration` | end-to-end thread across every worker + contract-exact settlement; **anvil devnet** parity vs the real `MarketEngine` | Python + Foundry | **8** (+2 devnet) | `npm run e2e` · `npm run devnet` |
-| | | | **154** | `npm test` |
+| | | | **178** | `npm test` |
 
 ## The determinism boundary (the key design decision)
 
@@ -77,7 +77,14 @@ A proof of this runs in CI: the relayer and inference tests assert the committed
   pinned the protocol fee to each market at creation so it can't be changed
   mid-flight, added a two-step (`Ownable2Step`-style) admin rotation so a lost key
   isn't terminal, and guarded the constructor against zero addresses — every
-  actionable finding (F1–F6) is now fixed in-tree with a regression test.
+  actionable finding (F1–F6) is now fixed in-tree with a regression test. A
+  **second pass** audited the `Treasury` and `ForgeToken` directly (previously
+  only exercised through MarketEngine): it added the same two-step governor
+  rotation and zero-address guard, and a `sweep` that reconciles tokens sent to
+  the treasury outside `collectFee` (otherwise unrecoverable), backed by a
+  `totalReserved` running total with the invariant
+  `sum(buckets) == totalReserved <= balance`; both contracts now have dedicated
+  suites (T1–T4).
 - **Optimistic resolution with a dispute window** (opt-in): with a nonzero
   `challengeWindow`, `resolve()` only *proposes* an outcome; it must survive the
   window — or an admin arbitration of a bonded `dispute()` — before `finalize()`
@@ -132,7 +139,7 @@ every PR, as three jobs:
 
 | Check | What it does |
 |-------|--------------|
-| `all tests` | Node 22 + Python 3.11 + Foundry + PyYAML, runs `npm test` (all 154 tests) |
+| `all tests` | Node 22 + Python 3.11 + Foundry + PyYAML, runs `npm test` (all 178 tests) |
 | `frontend build` | `npm install` + `next build` in `packages/frontend` — compiles the TSX and type-checks the whole app (the one thing the stdlib test suite can't cover) |
 | `anvil devnet parity` | boots a real anvil node, deploys the actual contracts, and asserts on-chain parimutuel payouts equal the Python `settle()` port (`npm run test:devnet`) |
 
