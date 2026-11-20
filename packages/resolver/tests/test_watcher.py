@@ -103,5 +103,62 @@ class IdempotencyTests(unittest.TestCase):
         self.assertIn("settled", r.detail)
 
 
+class DisputeWindowTests(unittest.TestCase):
+    """With a challenge window, resolve() only proposes (no archive yet) and a
+    separate finalize() settles it after the window elapses."""
+
+    WINDOW = 3600
+
+    def test_open_market_is_proposed_not_archived(self):
+        markets = [Market(M_YES, NOW - DAY, Status.Open, feed="EUR/USD")]
+        sink = LogReportSink()
+        resolver = DryRunResolver()
+        w = Watcher(resolver, StubOracleView({M_YES: Outcome.Yes}),
+                    StaticMarketSource(markets), sink, now_fn=lambda: NOW,
+                    challenge_window=self.WINDOW)
+        [r] = w.tick()
+        self.assertEqual(r.status, "proposed")
+        self.assertEqual(resolver.resolved, [M_YES])  # propose tx sent
+        self.assertEqual(resolver.finalized, [])
+        self.assertEqual(sink.reports, [])            # NOT archived until finalized
+
+    def test_closed_inside_window_waits(self):
+        markets = [Market(M_YES, NOW - DAY, Status.Closed, proposed_at=NOW - 100, feed="EUR/USD")]
+        resolver = DryRunResolver()
+        w = Watcher(resolver, StubOracleView({M_YES: Outcome.Yes}),
+                    StaticMarketSource(markets), LogReportSink(), now_fn=lambda: NOW,
+                    challenge_window=self.WINDOW)
+        [r] = w.tick()
+        self.assertEqual(r.status, "waiting")
+        self.assertEqual(resolver.finalized, [])
+
+    def test_closed_after_window_finalizes_and_archives(self):
+        markets = [Market(M_YES, NOW - DAY, Status.Closed, proposed_at=NOW - 2 * self.WINDOW,
+                          feed="EUR/USD")]
+        sink = LogReportSink()
+        resolver = DryRunResolver()
+        w = Watcher(resolver, StubOracleView({M_YES: Outcome.Yes}),
+                    StaticMarketSource(markets), sink, now_fn=lambda: NOW,
+                    challenge_window=self.WINDOW)
+        [r] = w.tick()
+        self.assertEqual(r.status, "finalized")
+        self.assertEqual(resolver.finalized, [M_YES])
+        self.assertEqual(sink.reports[0].outcome, 1)       # archived at finalization
+        self.assertTrue(sink.reports[0].tx_hash.startswith("0x"))
+
+    def test_finalize_revert_is_reported_not_crash(self):
+        class Reverting(DryRunResolver):
+            def finalize(self, market_id):
+                raise RuntimeError("ENGINE: disputed")
+
+        markets = [Market(M_YES, NOW - DAY, Status.Closed, proposed_at=NOW - 2 * self.WINDOW)]
+        w = Watcher(Reverting(), StubOracleView({M_YES: Outcome.Yes}),
+                    StaticMarketSource(markets), LogReportSink(), now_fn=lambda: NOW,
+                    challenge_window=self.WINDOW)
+        [r] = w.tick()
+        self.assertEqual(r.status, "error")
+        self.assertIn("disputed", r.detail)
+
+
 if __name__ == "__main__":
     unittest.main()

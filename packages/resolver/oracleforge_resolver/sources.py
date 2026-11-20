@@ -37,7 +37,7 @@ class TablelandMarketSource:
         import requests  # lazy: live path only
 
         sql = (
-            f"SELECT market_id, close_at, status, outcome FROM {self.table} "
+            f"SELECT market_id, close_at, status, outcome, proposed_at FROM {self.table} "
             f"WHERE status IN ('OPEN','CLOSED')"
         )
         resp = requests.get(
@@ -53,4 +53,5 @@ class TablelandMarketSource:
             close_at=int(r["close_at"]),
             status=status_from(r.get("status", "OPEN")),
             outcome=int(r.get("outcome") or 0),
+            proposed_at=int(r.get("proposed_at") or 0),  # dispute-window start (CLOSED markets)
         )

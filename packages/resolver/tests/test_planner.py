@@ -56,5 +56,37 @@ class PlannerTests(unittest.TestCase):
         self.assertIsNone(d.predicted_outcome)  # None => void
 
 
+class DisputeWindowTests(unittest.TestCase):
+    """The Status.Closed branch: a proposed outcome waits out its window, then
+    finalizes. (RESOLVE = 'propose'; FINALIZE = 'lock it in'.)"""
+
+    def _proposed(self, proposed_delta):
+        return Market("0xabc", NOW - DAY, Status.Closed, proposed_at=NOW + proposed_delta)
+
+    def test_within_window_waits(self):
+        d = plan_one(self._proposed(-100), NOW, _const(Outcome.Yes), challenge_window=3600)
+        self.assertEqual(d.action, Action.WAIT)
+        self.assertIn("challenge window", d.reason)
+
+    def test_after_window_finalizes_with_outcome(self):
+        d = plan_one(self._proposed(-7200), NOW, _const(Outcome.Yes), challenge_window=3600)
+        self.assertEqual(d.action, Action.FINALIZE)
+        self.assertEqual(d.predicted_outcome, 1)
+
+    def test_zero_window_finalizes_immediately(self):
+        d = plan_one(self._proposed(0), NOW, _const(Outcome.No))  # default window 0
+        self.assertEqual(d.action, Action.FINALIZE)
+        self.assertEqual(d.predicted_outcome, 0)
+
+    def test_open_market_still_proposes_under_a_window(self):
+        # the window governs only the Closed->finalize step; an Open past-close
+        # market is still RESOLVE (propose).
+        d = plan_one(
+            Market("0xabc", NOW - DAY, Status.Open), NOW, _const(Outcome.Yes),
+            challenge_window=3600,
+        )
+        self.assertEqual(d.action, Action.RESOLVE)
+
+
 if __name__ == "__main__":
     unittest.main()

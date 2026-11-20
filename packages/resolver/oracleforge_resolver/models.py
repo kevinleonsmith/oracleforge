@@ -37,10 +37,11 @@ def status_from(value) -> Status:
 
 
 class Action(Enum):
-    WAIT = "wait"        # not yet past closeAt
-    PENDING = "pending"  # closed, but oracle not ready
-    RESOLVE = "resolve"  # closed and oracle ready -> poke resolve()
-    SETTLED = "settled"  # already Resolved/Invalid on-chain
+    WAIT = "wait"          # not yet past closeAt, or inside the challenge window
+    PENDING = "pending"    # closed, but oracle not ready
+    RESOLVE = "resolve"    # past close and oracle ready -> propose resolve()
+    FINALIZE = "finalize"  # proposed, challenge window elapsed -> finalize()
+    SETTLED = "settled"    # already Resolved/Invalid on-chain
 
 
 @dataclass
@@ -51,6 +52,7 @@ class Market:
     outcome: int = 0
     feed: str = ""
     question: str = ""
+    proposed_at: int = 0  # when the outcome was proposed (Status.Closed); 0 if not
 
 
 @dataclass

@@ -19,12 +19,21 @@ driver (and a safety net — anyone can run one, since `resolve()` is open).
 | not past `closeAt` | — (not queried) | **wait** |
 | Resolved / Invalid | — (not queried) | **settled**, skip |
 | past `closeAt`, open | `Pending` | **pending** (feed not ready) |
-| past `closeAt`, open | `Yes` / `No` | **resolve** → poke `resolve()`, archive YES/NO |
-| past `closeAt`, open | `Invalid` | **resolve** → market voids, archive as void |
+| past `closeAt`, open | `Yes` / `No` | **resolve** → propose `resolve()`, archive YES/NO* |
+| past `closeAt`, open | `Invalid` | **resolve** → market voids, archive as void* |
+| proposed (`Closed`), window open | — | **wait** (challenge window) |
+| proposed (`Closed`), window elapsed | re-read for the label | **finalize** → `finalize()`, archive |
+
+\* When the engine's `challengeWindow` is 0 (the default) `resolve()` settles
+atomically, so the watcher archives in that same step — the original behavior.
+With a nonzero window, `resolve()` only *proposes*: the watcher reports `proposed`
+and holds off archiving until a later tick drives `finalize()` once the window
+passes (and no dispute is open). The window is read from `engine.challengeWindow()`.
 
 The oracle is only read for markets that are actually closed and unsettled, so a
-live watcher makes the minimum number of calls. A double-resolve (two watchers
-racing) simply reverts and is logged as a benign error, not a crash.
+live watcher makes the minimum number of calls. A double-resolve or an early
+finalize (two watchers racing, or a live dispute) simply reverts and is logged as
+a benign error, not a crash.
 
 ## Pieces
 

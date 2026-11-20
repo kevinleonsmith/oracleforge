@@ -84,7 +84,8 @@ def main(argv=None) -> int:
     oracle_addr = cfg.oracle_address or resolver.oracle_address()
     oracle_view = ChainOracleView(resolver.w3, oracle_addr)
     source = TablelandMarketSource(cfg.tableland_gateway, cfg.markets_table)
-    watcher = Watcher(resolver, oracle_view, source, LogReportSink())
+    window = resolver.challenge_window()  # 0 => instant finalization, like before
+    watcher = Watcher(resolver, oracle_view, source, LogReportSink(), challenge_window=window)
 
     try:
         if args.once:

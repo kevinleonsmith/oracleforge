@@ -17,6 +17,18 @@ ENGINE_ABI = [
         "inputs": [{"name": "marketId", "type": "bytes32"}], "outputs": [],
     },
     {
+        "type": "function", "name": "finalize", "stateMutability": "nonpayable",
+        "inputs": [{"name": "marketId", "type": "bytes32"}], "outputs": [],
+    },
+    {
+        "type": "function", "name": "challengeWindow", "stateMutability": "view",
+        "inputs": [], "outputs": [{"name": "", "type": "uint64"}],
+    },
+    {
+        "type": "function", "name": "proposedAt", "stateMutability": "view",
+        "inputs": [{"name": "", "type": "bytes32"}], "outputs": [{"name": "", "type": "uint64"}],
+    },
+    {
         "type": "function", "name": "oracle", "stateMutability": "view",
         "inputs": [], "outputs": [{"name": "", "type": "address"}],
     },
@@ -44,6 +56,7 @@ class Resolver(Protocol):
     chain_id: int
 
     def resolve(self, market_id: str) -> str: ...
+    def finalize(self, market_id: str) -> str: ...
     def market_status(self, market_id: str) -> int: ...
 
 
@@ -66,10 +79,16 @@ class GnosisResolver:
     def market_status(self, market_id: str) -> int:
         return int(self.engine.functions.getMarket(market_id).call()[4])
 
-    def resolve(self, market_id: str) -> str:
+    def challenge_window(self) -> int:
+        """Global challenge window (seconds); 0 means instant finalization."""
+        return int(self.engine.functions.challengeWindow().call())
+
+    def proposed_at(self, market_id: str) -> int:
+        return int(self.engine.functions.proposedAt(market_id).call())
+
+    def _send(self, fn, label: str) -> str:
         if self.acct is None:
-            raise RuntimeError("resolve() needs a signer; set RESOLVER_PK")
-        fn = self.engine.functions.resolve(market_id)
+            raise RuntimeError(f"{label}() needs a signer; set RESOLVER_PK")
         tx = fn.build_transaction({
             "from": self.account,
             "nonce": self.w3.eth.get_transaction_count(self.account),
@@ -79,21 +98,37 @@ class GnosisResolver:
         tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
         receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
         if receipt.status != 1:
-            raise RuntimeError(f"resolve reverted: {tx_hash.hex()}")
+            raise RuntimeError(f"{label} reverted: {tx_hash.hex()}")
         return tx_hash.hex()
+
+    def resolve(self, market_id: str) -> str:
+        return self._send(self.engine.functions.resolve(market_id), "resolve")
+
+    def finalize(self, market_id: str) -> str:
+        return self._send(self.engine.functions.finalize(market_id), "finalize")
 
 
 class DryRunResolver:
     def __init__(self, chain_id: int = 10200):
         self.chain_id = chain_id
-        self.resolved: list[str] = []
+        self.resolved: list[str] = []   # markets a resolve() poke was sent for
+        self.finalized: list[str] = []  # markets a finalize() poke was sent for
 
     def market_status(self, market_id: str) -> int:
         from .models import Status
 
-        return int(Status.Resolved) if market_id in self.resolved else int(Status.Open)
+        if market_id in self.finalized:
+            return int(Status.Resolved)
+        if market_id in self.resolved:
+            return int(Status.Closed)  # proposed, awaiting finalization
+        return int(Status.Open)
 
     def resolve(self, market_id: str) -> str:
         self.resolved.append(market_id)
         logger.info("[dry-run] resolve(%s)", market_id)
         return "0xDRYRUN" + market_id[2:10]
+
+    def finalize(self, market_id: str) -> str:
+        self.finalized.append(market_id)
+        logger.info("[dry-run] finalize(%s)", market_id)
+        return "0xFINAL0" + market_id[2:10]

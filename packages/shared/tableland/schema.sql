@@ -21,6 +21,7 @@ CREATE TABLE markets (
     outcome        INTEGER,                  -- 1=YES 0=NO null=unresolved
     created_at     INTEGER NOT NULL,
     close_at       INTEGER NOT NULL,
+    proposed_at    INTEGER DEFAULT 0,        -- outcome-proposal time; start of the dispute window (0 if none)
     arweave_tx     TEXT                      -- full spec + evidence bundle
 );
 CREATE INDEX idx_markets_status   ON markets (status);
