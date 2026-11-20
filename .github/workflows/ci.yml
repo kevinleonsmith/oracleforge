@@ -2,43 +2,34 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [master, main]
   pull_request:
 
 jobs:
-  contracts:
+  test:
+    name: all tests
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: packages/contracts
     steps:
       - uses: actions/checkout@v4
-      - uses: foundry-rs/foundry-toolchain@v1
-      - name: forge test
-        run: forge test -vv
 
-  ai:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: packages/ai-market-generator
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      # Node 22 for `node --test` + TypeScript type-stripping (frontend, lit).
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Python 3.11 for the stdlib-only worker test suites.
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: unittest (stdlib core)
-        run: python -m unittest discover -s tests -t .
 
-  frontend:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: packages/frontend
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-      - run: npm install
-      - run: npm run typecheck
+      # Foundry for the Solidity contract tests.
+      - name: Set up Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      # Runs every package suite: contracts, ai-market-generator, cartesi,
+      # relayer, resolver, archiver, frontend, inference, lit (103 tests).
+      # No install step needed — every suite runs on the stdlib / Foundry alone.
+      - name: Run full test suite
+        run: npm test
