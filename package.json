@@ -20,13 +20,15 @@
     "test:frontend": "cd packages/frontend && npm test",
     "test:inference": "cd packages/inference && python3 -m unittest discover -s tests -t .",
     "test:lit": "cd packages/lit && npm test",
+    "test:e2e": "cd integration && python3 -m unittest discover -s tests -t .",
     "ai": "cd packages/ai-market-generator && python3 -m oracleforge_ai.cli --format table",
     "relay": "cd packages/relayer && python3 -m oracleforge_relayer.cli --dry-run",
     "resolve": "cd packages/resolver && python3 -m oracleforge_resolver.cli --dry-run",
     "archive": "cd packages/archiver && python3 -m oracleforge_archiver.cli --dry-run",
     "inference": "cd packages/inference && python3 -m oracleforge_inference.cli serve",
     "lit": "cd packages/lit && npm run demo",
-    "test": "npm run test:contracts && npm run test:ai && npm run test:cartesi && npm run test:relayer && npm run test:resolver && npm run test:archiver && npm run test:frontend && npm run test:inference && npm run test:lit"
+    "e2e": "cd integration && python3 pipeline.py",
+    "test": "npm run test:contracts && npm run test:ai && npm run test:cartesi && npm run test:relayer && npm run test:resolver && npm run test:archiver && npm run test:frontend && npm run test:inference && npm run test:lit && npm run test:e2e"
   },
   "engines": { "node": ">=20" }
 }

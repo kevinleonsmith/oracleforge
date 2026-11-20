@@ -2,8 +2,9 @@
 
 _Last updated: 2026-11-20_
 
-MVP of an autonomous AI prediction-market protocol on Gnosis Chain. **10 packages,
-103 passing tests.** Every off-chain worker, pure-logic layer, smart contract, and
+MVP of an autonomous AI prediction-market protocol on Gnosis Chain. **11 packages,
+111 passing tests** (incl. a cross-package end-to-end that threads one market
+through every worker). Every off-chain worker, pure-logic layer, smart contract, and
 deploy manifest is built and tested; the live network clients are coded against
 standard APIs behind interfaces and remain unexercised without infrastructure and
 credentials (see [Tested vs. live](#tested-vs-live)).
@@ -23,6 +24,7 @@ Akash embeddings ─▶ Cartesi deterministic forecast ─▶ relayer createMark
 
 - **Run every test:** `npm test` (contracts via Foundry, the rest via Python `unittest` / `node --test`)
 - **Run the pipeline dry (no chain/network):** `npm run ai`, `npm run relay`, `npm run resolve`, `npm run archive`, `npm run lit`, `npm run inference`
+- **Run the whole thing end to end:** `npm run e2e` (generate → relay → trade → resolve → archive, with boundary checks)
 
 ## Packages
 
@@ -38,7 +40,8 @@ Akash embeddings ─▶ Cartesi deterministic forecast ─▶ relayer createMark
 | `lit` | token-gated / encrypted private markets (Lit Protocol) | TypeScript | **14** | `npm run lit` |
 | `frontend` | Next.js terminal UI; live Tableland + viem reads, switchable with mock | TypeScript | **10** | `npm run dev` |
 | `shared` | Tableland SQL schema + shared TypeScript types | SQL + TS | — | — |
-| | | | **103** | `npm test` |
+| `integration` | end-to-end thread across every worker + contract-exact settlement | Python | **8** | `npm run e2e` |
+| | | | **111** | `npm test` |
 
 ## The determinism boundary (the key design decision)
 
@@ -53,7 +56,8 @@ Two compute paths, split on purpose:
   `inference/`, behind the `Embedder` protocol.
 
 A proof of this runs in CI: the relayer and inference tests assert the committed
-(stub/remote) forecast equals the generator's local value bit-for-bit.
+(stub/remote) forecast equals the generator's local value bit-for-bit — and the
+`integration` suite re-proves it across the full relay path, end to end.
 
 ## Tested vs. live
 
@@ -68,6 +72,11 @@ A proof of this runs in CI: the relayer and inference tests assert the committed
   tamper detected).
 - Deploy manifests that are generated + validated: the Akash SDL, the Foundry
   deploy script, the Cartesi Dockerfile.
+- A **cross-package end-to-end** (`integration/`) that threads one market through
+  all four Python workers and asserts the boundary holds: a single `market_id`
+  from relay through resolve to archive, the committed forecast equal to the
+  generator's, parimutuel settlement value-conserving against a contract-exact
+  port of `MarketEngine.claim`, and stable content-addressed dedupe.
 
 **Coded behind interfaces, NOT exercised** (needs infrastructure/credentials):
 
