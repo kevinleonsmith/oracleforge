@@ -253,6 +253,14 @@ is the engine's concern (e.g. a no-winner push, F1). The `onlyEngine` gating,
 one-time `initEngine`, and the stay-`Pending`-on-no-healthy-feed fail-safe were all
 verified sound.
 
+The scalar-market oracle (`ScalarChainlinkAdapter`, added with the scalar engine)
+reuses this same health logic — it rejects `<= 0` answers (O1), honours the
+`maxStale == 0` escape hatch (O3), and keeps the `onlyEngine`/`initEngine` binding —
+and improves on O2: because it rescales each feed to a configured `targetDecimals`,
+a fallback with different decimals than the primary is handled correctly, so it
+needs no decimal-match requirement. It reports a value rather than a yes/no, which
+the `ScalarMarketEngine` clamps into the market band.
+
 ## What was checked and found sound
 
 - **Reentrancy:** `claim()` and the invalid-refund path both follow CEI; the

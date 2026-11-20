@@ -82,17 +82,29 @@ At `v = 150`, a trader holding the entire 600 LONG pool receives `490 * 600/600 
 
 Scalar settlement needs a raw number, not a yes/no, so it uses a separate
 `IScalarOracleAdapter` (`latestValue(marketId) -> (ready, value)`) rather than the
-binary `IOracleAdapter`. `MockScalarOracle` drives the tests; a production adapter
-would wrap a Chainlink feed's answer directly (with the same staleness/decimals
-care as `ChainlinkOracleAdapter`, review O1–O4).
+binary `IOracleAdapter`. `MockScalarOracle` drives the unit tests.
+
+`ScalarChainlinkAdapter` is the production adapter: it reads a Chainlink feed's
+answer and **rescales** it from the feed's native decimals to a configured
+`targetDecimals`, so the market's band can be expressed in a chosen unit (e.g. band
+`[3000, 5000]` in whole dollars against an 8-decimal feed). It shares the binary
+adapter's hardening (review O1/O3): a `<= 0` answer or zero timestamp is unhealthy
+(fail-safe to not-ready), and `maxStale == 0` disables the staleness check. Because
+each feed is rescaled independently to the common target, a fallback with *different*
+decimals than the primary is handled correctly — so unlike the binary adapter (O2)
+no decimal-match is required. An end-to-end test settles a real `ScalarMarketEngine`
+market from a mock feed through this adapter.
+
+The one remaining care is that `targetDecimals` and the band must agree: the engine
+clamps and compares the adapter's rescaled value against `lower`/`upper` directly.
 
 ## Status & follow-ups
 
-**Done (this stage):** the engine, the scalar oracle interface + mock, and the full
-test suite (14 lifecycle/settlement + 2 fuzz properties).
+**Done:** the engine (14 lifecycle/settlement + 2 fuzz properties), the scalar
+oracle interface + mock, and the production `ScalarChainlinkAdapter` (16 tests,
+including an end-to-end settle through the engine).
 
 **Not yet wired:**
-- A production `ScalarChainlinkAdapter` (read a feed's value, clamp/validate).
 - An **optimistic dispute window** — v1 settles atomically; the binary engine's
   propose → challenge → finalize flow is the pattern to port.
 - **Resolver** support (the watcher drives only binary `resolve` today).
