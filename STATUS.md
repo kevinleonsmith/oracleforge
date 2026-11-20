@@ -94,6 +94,10 @@ every PR, as two jobs:
 | `all tests` | Node 22 + Python 3.11 + Foundry + PyYAML, runs `npm test` (all 103 tests) |
 | `frontend build` | `npm install` + `next build` in `packages/frontend` — compiles the TSX and type-checks the whole app (the one thing the stdlib test suite can't cover) |
 
+Latest verified run: both checks green on
+[`dd3bafe`](https://github.com/kevinleonsmith/oracleforge/actions/runs/44714658322)
+· [all runs](https://github.com/kevinleonsmith/oracleforge/actions/workflows/ci.yml).
+
 The repo is **public**, so server-side **rulesets** are active on `master`:
 
 - `protect-master-history` — blocks force-pushes and branch deletion, **no bypass**
