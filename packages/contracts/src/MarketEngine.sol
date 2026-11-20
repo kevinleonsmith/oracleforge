@@ -129,6 +129,18 @@ contract MarketEngine is IMarketEngine {
         }
 
         bool yesWon = (o == IOracleAdapter.Outcome.Yes);
+        uint256 winningPool = yesWon ? m.yesPool : m.noPool;
+
+        // No stake on the winning side — the market is a push. Void it so every
+        // participant is refunded their principal. Otherwise claim() (which needs
+        // winningPool > 0 as the pro-rata denominator) can never pay anyone and
+        // the losing pool would be stranded in the contract forever.
+        if (winningPool == 0) {
+            m.status = Status.Invalid;
+            emit MarketResolved(marketId, type(uint8).max, 0);
+            return;
+        }
+
         m.outcome = yesWon ? 1 : 0;
         m.status = Status.Resolved;
 

@@ -158,6 +158,25 @@ contract MarketEngineFuzzTest is MiniTest {
         engine.claim(id);
     }
 
+    /// Regression (security review F1): a market whose winning side has no stake
+    /// must not strand the losing pool. resolve() voids it, no fee is taken, and
+    /// every participant is refunded their principal — the engine empties.
+    function test_noWinnerMarket_refundsLosingSide() public {
+        bytes32 id = _open();
+        // both traders bet NO; the oracle resolves YES, so the winning (YES)
+        // pool is empty.
+        _take(id, traders[2], IMarketEngine.Side.No, 500);
+        _take(id, traders[3], IMarketEngine.Side.No, 300);
+        oracle.setOutcome(id, IOracleAdapter.Outcome.Yes);
+        vm.warp(block.timestamp + 8 days);
+        engine.resolve(id);
+
+        assertEq(treasury.reserves(OPS, address(collateral)), 0, "no fee on a void");
+        assertEq(_claim(id, traders[2]), 500, "loser #1 refunded principal");
+        assertEq(_claim(id, traders[3]), 300, "loser #2 refunded principal");
+        assertEq(collateral.balanceOf(address(engine)), 0, "engine emptied");
+    }
+
     /// An invalid market refunds every participant their full principal, exactly.
     function testFuzz_invalidRefundsPrincipal(uint96 a, uint96 b, uint96 c, uint96 d) public {
         uint256[4] memory s = _stakes(a, b, c, d);
