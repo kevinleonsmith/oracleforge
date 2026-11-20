@@ -24,6 +24,7 @@ interface IMarketEngine {
         uint64 createdAt;
         uint64 closeAt; // positions blocked after this time
         uint16 aiProbBps; // AI-initialized YES probability, basis points (0..10000)
+        uint16 feeBps; // protocol fee snapshotted at creation (immutable for this market)
         Status status;
         uint8 outcome; // valid once Resolved: 1 = Yes, 0 = No
         uint256 yesPool; // collateral staked on YES

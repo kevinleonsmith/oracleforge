@@ -17,7 +17,9 @@ contract MarketEngine is IMarketEngine {
     IOracleAdapter public immutable oracle;
     ITreasury public immutable treasury;
 
-    /// @notice Protocol fee in basis points, taken from the losing pool at resolution.
+    /// @notice Default protocol fee (basis points) applied to markets at creation.
+    ///         Each market snapshots this value; changing it affects only markets
+    ///         opened afterward, never ones already accepting positions.
     uint16 public feeBps = 200; // 2.0%
 
     /// @notice Addresses allowed to create markets (the AI generator's relayer).
@@ -83,6 +85,7 @@ contract MarketEngine is IMarketEngine {
             createdAt: uint64(block.timestamp),
             closeAt: closeAt,
             aiProbBps: aiProbBps,
+            feeBps: feeBps, // snapshot the current protocol fee for this market
             status: Status.Open,
             outcome: 0,
             yesPool: 0,
@@ -144,9 +147,11 @@ contract MarketEngine is IMarketEngine {
         m.outcome = yesWon ? 1 : 0;
         m.status = Status.Resolved;
 
-        // Fee is skimmed from the losing pool (winners' principal is untouched).
+        // Fee is skimmed from the losing pool (winners' principal is untouched),
+        // at the rate snapshotted when the market opened — not the current global
+        // feeBps, so an admin can't change the terms of an in-flight market.
         uint256 losingPool = yesWon ? m.noPool : m.yesPool;
-        uint256 fee = (losingPool * feeBps) / 10_000;
+        uint256 fee = (losingPool * m.feeBps) / 10_000;
         if (fee > 0) {
             collateral.approve(address(treasury), fee);
             treasury.collectFee(address(collateral), fee);

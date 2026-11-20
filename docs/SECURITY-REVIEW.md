@@ -14,7 +14,7 @@ pass looks for what those don't assert.
 | # | Severity | Status | Summary |
 |---|----------|--------|---------|
 | F1 | **High** | **Fixed** | No-winner market stranded the losing pool permanently |
-| F2 | Medium | Documented | Fee is read at resolve time, not fixed at market creation |
+| F2 | Medium | **Fixed** | Fee is read at resolve time, not fixed at market creation |
 | F3 | Low | Documented | Single-shot oracle read, no dispute/challenge window |
 | F4 | Low | Fixed | Dead `Status.Closed` state (never set) — clarity only |
 | F5 | Low | Documented | No admin rotation; admin-key loss is unrecoverable |
@@ -42,19 +42,23 @@ already skimmed) sits in the contract **with no code path that can ever move it*
 - **Regression:** `test_noWinnerMarket_refundsLosingSide` in `MarketEngineFuzz.t.sol`
   (all NO, resolves YES → no fee, both refunded, engine balance 0).
 
-### F2 — Fee is read at resolve time, not fixed at creation _(Medium, documented)_
+### F2 — Fee is read at resolve time, not fixed at creation _(Medium, fixed)_
 
-`resolve()` applies the **current** `feeBps`. `admin` can call `setFeeBps` (up to
+`resolve()` applied the **current** `feeBps`. `admin` could call `setFeeBps` (up to
 the 10% cap) at any time, including after positions are taken but before
 resolution, changing the economics bettors agreed to. `admin` is a trusted role
-(it already authorizes relayers), so this is privileged-role risk rather than an
+(it already authorizes relayers), so this was privileged-role risk rather than an
 open exploit, but the fee a market settles at should be fixed when the market
 opens.
 
-- **Recommended fix:** snapshot `feeBps` into the `Market` struct at
-  `createMarket` and read `m.feeBps` in `resolve`. Note this changes the
-  `getMarket` tuple, so the frontend ABI in `packages/frontend/lib/contracts.ts`
-  must be updated in lockstep. Deferred to keep this pass to code-safe changes.
+- **Fix:** `feeBps` is now snapshotted into the `Market` struct at `createMarket`
+  and `resolve()` reads `m.feeBps`; the global `feeBps` is now only the default
+  applied to **new** markets. The `getMarket` tuple gained a field, so the viem
+  ABI and `OnchainMarket` type in `packages/frontend/lib/contracts.ts` were updated
+  in lockstep (only named-field decoders read the tuple, so nothing else moved).
+- **Regression:** `test_feeIsFixedAtCreation_notResolve` in `MarketEngineFuzz.t.sol`
+  (open at 2%, admin hikes the global to 10%, resolve still skims the market's
+  original 2%).
 
 ### F3 — Single-shot oracle read, no dispute window _(Low, documented)_
 

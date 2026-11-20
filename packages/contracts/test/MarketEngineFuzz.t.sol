@@ -158,6 +158,27 @@ contract MarketEngineFuzzTest is MiniTest {
         engine.claim(id);
     }
 
+    /// Regression (security review F2): the fee is snapshotted when the market
+    /// opens, so an admin raising the global feeBps after positions are in cannot
+    /// change the terms of an in-flight market.
+    function test_feeIsFixedAtCreation_notResolve() public {
+        bytes32 id = _open(); // opens at the default 200 bps (2%)
+        _take(id, traders[0], IMarketEngine.Side.Yes, 1000);
+        _take(id, traders[2], IMarketEngine.Side.No, 1000);
+
+        // admin hikes the global fee to the 10% cap AFTER the book is set
+        vm.prank(admin);
+        engine.setFeeBps(1000);
+
+        oracle.setOutcome(id, IOracleAdapter.Outcome.Yes);
+        vm.warp(block.timestamp + 8 days);
+        engine.resolve(id);
+
+        // fee must be the 2% the market opened with (20), not the new 10% (100)
+        assertEq(treasury.reserves(OPS, address(collateral)), 20, "fee frozen at creation");
+        assertEq(uint256(engine.getMarket(id).feeBps), 200, "market records its own bps");
+    }
+
     /// Regression (security review F1): a market whose winning side has no stake
     /// must not strand the losing pool. resolve() voids it, no fee is taken, and
     /// every participant is refunded their principal — the engine empties.

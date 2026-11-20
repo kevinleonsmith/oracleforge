@@ -24,6 +24,7 @@ export const marketEngineAbi = [
         { name: "createdAt", type: "uint64" },
         { name: "closeAt", type: "uint64" },
         { name: "aiProbBps", type: "uint16" },
+        { name: "feeBps", type: "uint16" },
         { name: "status", type: "uint8" },
         { name: "outcome", type: "uint8" },
         { name: "yesPool", type: "uint256" },
@@ -53,6 +54,7 @@ const STATUS = ["OPEN", "CLOSED", "RESOLVED", "INVALID"] as const;
 export interface OnchainMarket {
   status: (typeof STATUS)[number];
   aiProbBps: number;
+  feeBps: number;
   yesPool: string;
   noPool: string;
   outcome?: 0 | 1;
@@ -73,6 +75,7 @@ export async function readMarketOnchain(marketId: `0x${string}`): Promise<Onchai
     return {
       status,
       aiProbBps: m.aiProbBps,
+      feeBps: m.feeBps,
       yesPool: m.yesPool.toString(),
       noPool: m.noPool.toString(),
       outcome: status === "RESOLVED" ? ((m.outcome ? 1 : 0) as 0 | 1) : undefined,
