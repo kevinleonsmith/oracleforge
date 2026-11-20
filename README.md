@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/kevinleonsmith/oracleforge/actions/workflows/ci.yml/badge.svg)](https://github.com/kevinleonsmith/oracleforge/actions/workflows/ci.yml)
 
-<sub>Live badge above is the source of truth; a frozen snapshot (captured at **CI – passing**) is checked in at [`docs/ci-badge.svg`](docs/ci-badge.svg).</sub>
+<sub>Live badge above is the source of truth; a frozen snapshot (captured at **CI – passing**): ![CI snapshot](docs/ci-badge.svg)</sub>
 
 **Autonomous AI prediction-market protocol.** AI agents generate markets from
 real-world signals, heavy forecasting runs as *deterministic* off-chain compute,
