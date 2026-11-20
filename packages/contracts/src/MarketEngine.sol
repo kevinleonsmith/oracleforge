@@ -25,6 +25,9 @@ contract MarketEngine is IMarketEngine {
     /// @notice Addresses allowed to create markets (the AI generator's relayer).
     mapping(address => bool) public isRelayer;
     address public admin;
+    /// @notice Nominated next admin. Two-step: the nominee must call acceptAdmin()
+    ///         to take the role, so a mistyped transfer can't strand the protocol.
+    address public pendingAdmin;
 
     mapping(bytes32 => Market) internal _markets;
     // marketId => account => side => staked amount
@@ -45,6 +48,8 @@ contract MarketEngine is IMarketEngine {
 
     event RelayerUpdated(address indexed relayer, bool allowed);
     event FeeUpdated(uint16 feeBps);
+    event AdminTransferStarted(address indexed currentAdmin, address indexed pendingAdmin);
+    event AdminTransferred(address indexed previousAdmin, address indexed newAdmin);
     event ChallengeWindowUpdated(uint64 window);
     event DisputeBondUpdated(uint256 bond);
     event ResolutionProposed(bytes32 indexed marketId, uint8 proposed, uint64 at);
@@ -62,6 +67,10 @@ contract MarketEngine is IMarketEngine {
     }
 
     constructor(address _collateral, address _oracle, address _treasury, address _admin) {
+        require(_collateral != address(0), "ENGINE: collateral zero");
+        require(_oracle != address(0), "ENGINE: oracle zero");
+        require(_treasury != address(0), "ENGINE: treasury zero");
+        require(_admin != address(0), "ENGINE: admin zero");
         collateral = IERC20(_collateral);
         oracle = IOracleAdapter(_oracle);
         treasury = ITreasury(_treasury);
@@ -70,6 +79,26 @@ contract MarketEngine is IMarketEngine {
     }
 
     // --------------------------------------------------------------------- admin
+
+    /// @notice Begin a two-step admin handover by nominating `newAdmin`. The role
+    ///         does not change until the nominee calls acceptAdmin(), so a wrong
+    ///         address never takes effect. Passing address(0) cancels a pending
+    ///         nomination. Relayer membership is unaffected — manage it separately
+    ///         with setRelayer().
+    function transferAdmin(address newAdmin) external onlyAdmin {
+        pendingAdmin = newAdmin;
+        emit AdminTransferStarted(admin, newAdmin);
+    }
+
+    /// @notice Accept a pending admin nomination. Callable only by the nominee,
+    ///         completing the handover begun by transferAdmin().
+    function acceptAdmin() external {
+        require(msg.sender == pendingAdmin, "ENGINE: not pending admin");
+        address previous = admin;
+        admin = pendingAdmin;
+        pendingAdmin = address(0);
+        emit AdminTransferred(previous, admin);
+    }
 
     function setRelayer(address relayer, bool allowed) external onlyAdmin {
         isRelayer[relayer] = allowed;

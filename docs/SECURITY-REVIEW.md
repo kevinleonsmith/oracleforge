@@ -17,9 +17,15 @@ pass looks for what those don't assert.
 | F2 | Medium | **Fixed** | Fee is read at resolve time, not fixed at market creation |
 | F3 | Low | **Fixed** | Single-shot oracle read, no dispute/challenge window |
 | F4 | Low | **Fixed** | Dead `Status.Closed` state (never set) — now the proposed state |
-| F5 | Low | Documented | No admin rotation; admin-key loss is unrecoverable |
-| F6 | Info | Documented | Constructor missing zero-address checks |
+| F5 | Low | **Fixed** | No admin rotation; admin-key loss was unrecoverable |
+| F6 | Info | **Fixed** | Constructor missing zero-address checks |
 | F7 | Info | Verified safe | No `ReentrancyGuard` (sound today via CEI + trusted token) |
+
+Every actionable finding (F1–F6) is now fixed in-tree with a regression test; F7 is
+a documented no-op that holds under the current trusted-collateral assumption. The
+remaining residual risk is the one called out under F3/F5 — arbitration and the
+admin role are a single trusted key, the expected MVP posture, with the production
+path (a decentralized court, a Safe/timelock successor) noted inline.
 
 ### F1 — No-winner market stranded the losing pool _(High, fixed)_
 
@@ -86,17 +92,35 @@ The `Status` enum had `Closed` but nothing ever set it; `resolve()` went
 meaning — "outcome proposed, awaiting finalization" — so the state is no longer
 dead and the enum ordinals the Python/TS ports mirror are unchanged.
 
-### F5 — No admin rotation _(Low, documented)_
+### F5 — No admin rotation _(Low, fixed)_
 
-`admin` is set once in the constructor with no `setAdmin`/two-step transfer. A lost
-admin key means relayers can never be changed and the fee can never be adjusted.
-Recommend an `Ownable2Step`-style transfer for production.
+`admin` was set once in the constructor with no transfer path. A lost admin key
+meant relayers could never be changed and the fee could never be adjusted — the
+privileged role was unrecoverable.
 
-### F6 — Constructor missing zero-address checks _(Info)_
+- **Fix:** an `Ownable2Step`-style handover. `transferAdmin(newAdmin)` (onlyAdmin)
+  _nominates_ a successor into `pendingAdmin` without moving the role; the nominee
+  must call `acceptAdmin()` to complete it. A mistyped or dead address therefore
+  never takes effect (nobody can accept it), and passing `address(0)` cancels a
+  pending nomination. Relayer membership is deliberately left untouched by a
+  rotation — it stays under `setRelayer` — so the handover grants exactly the admin
+  role and nothing implicit.
+- **Regression:** `MarketEngineAdmin.t.sol` — two-step semantics, only-admin
+  nominate, only-nominee accept, cancellation, full-powers-transferred /
+  old-admin-locked, and a chained third rotation.
+- **Still MVP-shaped:** a single EOA admin. Production should nominate a Gnosis
+  Safe / timelock as the successor — which this two-step flow already supports.
 
-`MarketEngine`'s constructor does not reject a zero `collateral`/`oracle`/
-`treasury`/`admin`. Deploy-time trust only; add `require(... != address(0))` for
-defense in depth.
+### F6 — Constructor missing zero-address checks _(Info, fixed)_
+
+`MarketEngine`'s constructor accepted a zero `collateral`/`oracle`/`treasury`/
+`admin`, any of which would brick the deployment (the first three are immutable).
+
+- **Fix:** four `require(... != address(0))` guards at the top of the constructor,
+  each with a named reason. Every real deploy path (tests, `Deploy.s.sol`, the anvil
+  devnet) already passes live addresses, so the guards are purely defensive.
+- **Regression:** `MarketEngineAdmin.t.sol` asserts each of the four slots reverts
+  with its specific message on a zero address.
 
 ### F7 — No `ReentrancyGuard` _(Info, verified safe)_
 
