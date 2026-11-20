@@ -59,7 +59,8 @@ class Market:
 class Decision:
     market_id: str
     action: Action
-    predicted_outcome: Optional[int] = None  # 1=YES 0=NO None=invalid/n-a
+    predicted_outcome: Optional[int] = None  # binary: 1=YES 0=NO None=invalid/n-a
+    predicted_value: Optional[int] = None  # scalar: proposed settlement value
     reason: str = ""
 
 
@@ -68,8 +69,9 @@ class OracleReport:
     """Archival record of a settlement (destined for Tableland + Arweave)."""
 
     market_id: str
-    outcome: int            # 1=YES 0=NO ; -1 for invalid/voided
+    outcome: int            # binary: 1=YES 0=NO ; -1 for invalid/voided (scalar: unused, 0)
     resolved_at: int
     feed: str = ""
     tx_hash: str = ""
-    answer: Optional[int] = None
+    answer: Optional[int] = None  # raw oracle answer; the settled value for scalar markets
+    kind: str = "binary"    # "binary" | "scalar"

@@ -7,12 +7,14 @@ reads.
 """
 from __future__ import annotations
 
-from typing import Callable, List
+from typing import Callable, List, Tuple
 
 from .models import Action, Decision, Market, Outcome, Status
 
 # Called only when a market is closed and unsettled: market_id -> Outcome.
 OutcomeFn = Callable[[str], Outcome]
+# Scalar equivalent: market_id -> (ready, value).
+ValueFn = Callable[[str], Tuple[bool, int]]
 
 
 def _predicted_outcome(o: Outcome):
@@ -66,3 +68,56 @@ def plan(
     markets: List[Market], now: int, outcome_fn: OutcomeFn, challenge_window: int = 0
 ) -> List[Decision]:
     return [plan_one(m, now, outcome_fn, challenge_window) for m in markets]
+
+
+# ----------------------------------------------------------------- scalar markets
+
+
+def plan_scalar_one(
+    market: Market, now: int, value_fn: ValueFn, challenge_window: int = 0
+) -> Decision:
+    """Scalar analogue of plan_one. Identical lifecycle — the only difference is
+    that readiness and the proposed payload come from the scalar oracle's
+    ``(ready, value)`` instead of a yes/no Outcome. The ScalarMarketEngine shares
+    resolve()/finalize() and the Open->Closed->Resolved status flow, so the
+    decisions (WAIT/PENDING/RESOLVE/FINALIZE/SETTLED) carry straight over."""
+    if market.status in (Status.Resolved, Status.Invalid):
+        return Decision(market.market_id, Action.SETTLED, reason="already settled")
+
+    # Proposed value in its challenge window: wait it out, then finalize(). The
+    # engine already stored the clamped value; the read here just labels the
+    # archival record. Inert when challenge_window == 0 (resolve finalizes inline).
+    if market.status == Status.Closed:
+        deadline = market.proposed_at + challenge_window
+        if now < deadline:
+            return Decision(
+                market.market_id, Action.WAIT,
+                reason=f"challenge window: {deadline - now}s left",
+            )
+        _, value = value_fn(market.market_id)
+        return Decision(
+            market.market_id, Action.FINALIZE, predicted_value=value,
+            reason=f"window elapsed -> finalize (value={value})",
+        )
+
+    if now < market.close_at:
+        return Decision(
+            market.market_id, Action.WAIT,
+            reason=f"closes in {market.close_at - now}s",
+        )
+
+    # past close and unsettled -> ask the scalar oracle whether a value is ready
+    ready, value = value_fn(market.market_id)
+    if not ready:
+        return Decision(market.market_id, Action.PENDING, reason="oracle feed not ready")
+
+    return Decision(
+        market.market_id, Action.RESOLVE, predicted_value=value,
+        reason=f"oracle ready: value={value}",
+    )
+
+
+def plan_scalar(
+    markets: List[Market], now: int, value_fn: ValueFn, challenge_window: int = 0
+) -> List[Decision]:
+    return [plan_scalar_one(m, now, value_fn, challenge_window) for m in markets]

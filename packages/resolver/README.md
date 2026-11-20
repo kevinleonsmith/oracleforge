@@ -39,18 +39,26 @@ a benign error, not a crash.
 
 | File | Role |
 |------|------|
-| `planner.py` | pure decision function (fully tested) |
+| `planner.py` | pure decision function — `plan` (binary) · `plan_scalar` (range) |
 | `sources.py` | `StaticMarketSource` (dry-run) · `TablelandMarketSource` (live, read-only) |
-| `oracle.py` | `StubOracleView` · `ChainOracleView` (adapter's `resolve()` view) |
-| `chain.py` | `GnosisResolver` (web3) · `DryRunResolver` (no network) |
+| `oracle.py` | `StubOracleView`/`ChainOracleView` (binary `resolve()`) · `StubScalarOracleView`/`ChainScalarOracleView` (scalar `latestValue()`) |
+| `chain.py` | `GnosisResolver` (web3) · `DryRunResolver` (no network) — shared `resolve()`/`finalize()` drive both engines |
 | `archive.py` | `LogReportSink` (default) · `TablelandReportSink` (write TODO) |
-| `watcher.py` | orchestration: `tick()` once, `watch()` loops |
+| `watcher.py` | orchestration: `Watcher` (binary) · `ScalarWatcher` (range), each `tick()` once / `watch()` loops |
+
+## Scalar (range) markets
+
+The `ScalarMarketEngine` shares the same `resolve()`/`finalize()` lifecycle, so
+`ScalarWatcher` drives it with the identical propose → wait → finalize flow; it
+only differs in reading the scalar oracle's `latestValue()` (a numeric value, not a
+yes/no) and archiving the settled value. See [`docs/SCALAR-MARKETS.md`](../../docs/SCALAR-MARKETS.md).
 
 ## Run
 
 ```bash
 # one tick over a sample spread (no chain): shows wait/pending/resolve/settled
 python3 -m oracleforge_resolver.cli --dry-run
+python3 -m oracleforge_resolver.cli --dry-run --scalar   # the scalar-market variant
 
 # tests (stdlib only)
 python3 -m unittest discover -s tests -t .
