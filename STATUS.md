@@ -1,6 +1,6 @@
 # OracleForge — Build Status
 
-_Last updated: 2026-11-19_
+_Last updated: 2026-11-20_
 
 MVP of an autonomous AI prediction-market protocol on Gnosis Chain. **10 packages,
 103 passing tests.** Every off-chain worker, pure-logic layer, smart contract, and
@@ -82,18 +82,28 @@ A proof of this runs in CI: the relayer and inference tests assert the committed
 | GPU model path | `inference/` (`TransformerEmbedder`, `LLMDrafter`) | `torch` + CUDA GPU |
 | Akash deployment | `inference/deploy/` | `provider-services` CLI + AKT wallet |
 | Lit network encryption | `lit/litClient.ts` (`RealLitClient`) | `@lit-protocol/*` + wallet |
-| Frontend build/render | `frontend/` | `npm install` + a deployment |
+| Frontend live-chain render | `frontend/` (`chainApi.ts`) | a deployment (build itself now runs in CI) |
 
-## Branch protection
+## CI & branch protection
 
-Server-side branch protection (and rulesets) require a **public repo or GitHub
-Pro**; this repo is private on a free plan, so neither is available. As a stopgap,
-a **local** `pre-push` guard blocks force-pushes and deletion of `master` in this
-clone — it is not server-side, so it does not stop pushes from other machines or
-the web UI. Install it in another clone with `bash scripts/install-git-hooks.sh`.
-For real server-side protection, make the repo public or upgrade to Pro, then apply
-a Light ruleset (no force-push/deletion, CI `all tests` required, direct pushes
-allowed).
+**CI** (`.github/workflows/ci.yml`) runs on every push to `master`/`main` and on
+every PR, as two jobs:
+
+| Check | What it does |
+|-------|--------------|
+| `all tests` | Node 22 + Python 3.11 + Foundry + PyYAML, runs `npm test` (all 103 tests) |
+| `frontend build` | `npm install` + `next build` in `packages/frontend` — compiles the TSX and type-checks the whole app (the one thing the stdlib test suite can't cover) |
+
+The repo is **public**, so server-side **rulesets** are active on `master`:
+
+- `protect-master-history` — blocks force-pushes and branch deletion, **no bypass**
+  (applies to everyone, owner included).
+- `protect-master-ci` — requires both status checks above to pass, with
+  `strict` up-to-date-before-merge; owner retains admin bypass for direct pushes.
+
+A **local** `pre-push` guard (`scripts/install-git-hooks.sh`) additionally blocks
+force-pushes / deletion of `master` client-side; install it in each clone with
+`bash scripts/install-git-hooks.sh`.
 
 ## Toolchains verified in this environment
 
