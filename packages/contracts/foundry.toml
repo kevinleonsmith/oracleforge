@@ -9,6 +9,9 @@ optimizer = true
 optimizer_runs = 200
 evm_version = "paris"        # Gnosis Chain compatible
 
+[fuzz]
+runs = 512                   # property-based settlement tests (MarketEngineFuzz)
+
 [fmt]
 line_length = 110
 tab_width = 4

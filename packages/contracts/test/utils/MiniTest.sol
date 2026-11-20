@@ -24,4 +24,18 @@ abstract contract MiniTest {
     function assertEq(uint256 a, uint256 b, string memory m) internal pure {
         require(a == b, m);
     }
+
+    function assertGe(uint256 a, uint256 b, string memory m) internal pure {
+        require(a >= b, m);
+    }
+
+    function assertLe(uint256 a, uint256 b, string memory m) internal pure {
+        require(a <= b, m);
+    }
+
+    /// @notice Clamp a fuzzed value into [lo, hi] (no forge-std `bound`).
+    function _bound(uint256 x, uint256 lo, uint256 hi) internal pure returns (uint256) {
+        require(hi >= lo, "bound: hi<lo");
+        return lo + (x % (hi - lo + 1));
+    }
 }
