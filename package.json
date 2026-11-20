@@ -1,0 +1,20 @@
+{
+  "name": "oracleforge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Autonomous AI prediction-market protocol — MVP monorepo",
+  "workspaces": [
+    "packages/shared",
+    "packages/frontend"
+  ],
+  "scripts": {
+    "dev": "npm --workspace @oracleforge/frontend run dev",
+    "build:frontend": "npm --workspace @oracleforge/frontend run build",
+    "typecheck": "npm --workspace @oracleforge/frontend run typecheck",
+    "test:contracts": "cd packages/contracts && forge test -vv",
+    "test:ai": "cd packages/ai-market-generator && python3 -m unittest discover -s tests -t .",
+    "ai": "cd packages/ai-market-generator && python3 -m oracleforge_ai.cli --format table",
+    "test": "npm run test:contracts && npm run test:ai"
+  },
+  "engines": { "node": ">=20" }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "@oracleforge/shared",
+  "version": "0.1.0",
+  "description": "Shared types and Tableland schema for OracleForge",
+  "type": "module",
+  "main": "types/index.ts",
+  "types": "types/index.ts",
+  "files": ["types", "tableland"],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  }
+}

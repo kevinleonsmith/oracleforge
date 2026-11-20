@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oracleforge-ai"
+version = "0.1.0"
+description = "OracleForge autonomous AI prediction-market generator"
+requires-python = ">=3.10"
+# Core pipeline runs on the stdlib. The deps below are only needed for the
+# production embedder/LLM path (Akash GPU nodes), never for the deterministic
+# Cartesi core or CI.
+dependencies = []
+
+[project.optional-dependencies]
+ml = [
+    "numpy>=1.26",
+    "pandas>=2.1",
+    "sentence-transformers>=2.6",
+    "transformers>=4.40",
+    "langchain>=0.2",
+    "langchain-community>=0.2",
+]
+serve = ["fastapi>=0.110", "uvicorn>=0.29"]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+oracleforge-ai = "oracleforge_ai.cli:main"
+
+[tool.setuptools]
+packages = ["oracleforge_ai"]

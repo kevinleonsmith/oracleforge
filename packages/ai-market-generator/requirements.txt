@@ -1,0 +1,5 @@
+# Core pipeline needs NOTHING here — it runs on the Python standard library so it
+# executes inside a Cartesi Machine and in CI with no installs.
+#
+# Install the production ML path with:  pip install -e ".[ml,serve,dev]"
+# (declared in pyproject.toml). Pinned ranges are listed there.
