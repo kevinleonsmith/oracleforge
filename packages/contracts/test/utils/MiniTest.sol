@@ -25,6 +25,10 @@ abstract contract MiniTest {
         require(a == b, m);
     }
 
+    function assertEq(address a, address b, string memory m) internal pure {
+        require(a == b, m);
+    }
+
     function assertGe(uint256 a, uint256 b, string memory m) internal pure {
         require(a >= b, m);
     }

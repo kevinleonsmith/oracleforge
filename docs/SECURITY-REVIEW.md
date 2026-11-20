@@ -15,8 +15,8 @@ pass looks for what those don't assert.
 |---|----------|--------|---------|
 | F1 | **High** | **Fixed** | No-winner market stranded the losing pool permanently |
 | F2 | Medium | **Fixed** | Fee is read at resolve time, not fixed at market creation |
-| F3 | Low | Documented | Single-shot oracle read, no dispute/challenge window |
-| F4 | Low | Fixed | Dead `Status.Closed` state (never set) — clarity only |
+| F3 | Low | **Fixed** | Single-shot oracle read, no dispute/challenge window |
+| F4 | Low | **Fixed** | Dead `Status.Closed` state (never set) — now the proposed state |
 | F5 | Low | Documented | No admin rotation; admin-key loss is unrecoverable |
 | F6 | Info | Documented | Constructor missing zero-address checks |
 | F7 | Info | Verified safe | No `ReentrancyGuard` (sound today via CEI + trusted token) |
@@ -60,23 +60,31 @@ opens.
   (open at 2%, admin hikes the global to 10%, resolve still skims the market's
   original 2%).
 
-### F3 — Single-shot oracle read, no dispute window _(Low, documented)_
+### F3 — Single-shot oracle read, no dispute window _(Low, fixed)_
 
-`resolve()` is permissionless and reads the oracle **once**, at whatever block the
-first caller picks after `closeAt`. For a Chainlink feed hovering near the
-threshold, the outcome is whatever the feed reads in that block, with no
-challenge/dispute period to contest a bad or transient read. The `disputes`
-treasury reserve bucket is referenced in docs but no dispute mechanism exists yet.
-Acceptable for the MVP; a resolution delay + challenge window is the production
-path.
+`resolve()` used to read the oracle **once**, at whatever block the first caller
+picked after `closeAt`, and finalize immediately — no period to contest a bad or
+transient read near a threshold.
 
-### F4 — Dead `Status.Closed` state _(Low, fixed: documented)_
+- **Fix:** optimistic resolution with a bonded dispute window. With a nonzero
+  `challengeWindow`, `resolve()` only *proposes* the oracle's outcome (status
+  `Closed`); `finalize()` locks it in once the window elapses, and anyone can
+  `dispute()` within the window by posting `disputeBond` collateral. A dispute
+  freezes finalization until the admin `arbitrate()`s: an upheld challenge refunds
+  the bond and the admin's ruling becomes authoritative, a rejected one forfeits
+  the bond to the treasury and the proposed outcome stands. The default
+  `challengeWindow == 0` preserves instant settlement, so the window is opt-in and
+  strictly additive. Covered by `MarketEngineDispute.t.sol` (5 tests).
+- **Still MVP-shaped:** arbitration is a single trusted admin, not a decentralized
+  court; a stuck dispute (admin never rules) locks the market's funds. A
+  Kleros/UMA-style escalation is the production path.
 
-The `Status` enum has `Closed` (past close, awaiting resolution) but nothing ever
-sets it; `resolve()` transitions `Open → Resolved/Invalid` directly and accepts
-either `Open` or `Closed` as input. Harmless, but the unused state invites
-confusion. Left in place (removing it shifts enum ordinals the Python/TS ports
-mirror); documented here as intentional.
+### F4 — `Status.Closed` state was dead _(Low, fixed)_
+
+The `Status` enum had `Closed` but nothing ever set it; `resolve()` went
+`Open → Resolved/Invalid` directly. The dispute window (F3) gives `Closed` a real
+meaning — "outcome proposed, awaiting finalization" — so the state is no longer
+dead and the enum ordinals the Python/TS ports mirror are unchanged.
 
 ### F5 — No admin rotation _(Low, documented)_
 

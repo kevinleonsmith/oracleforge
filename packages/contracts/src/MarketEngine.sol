@@ -31,8 +31,25 @@ contract MarketEngine is IMarketEngine {
     mapping(bytes32 => mapping(address => mapping(Side => uint256))) public stakeOf;
     mapping(bytes32 => mapping(address => bool)) public claimed;
 
+    // --- optimistic resolution + dispute window ---
+    /// @notice Seconds a proposed outcome can be challenged before it finalizes.
+    ///         0 (the default) means resolve() finalizes immediately — the
+    ///         original behavior — so the window is strictly opt-in.
+    uint64 public challengeWindow;
+    /// @notice Collateral a challenger must bond to dispute. 0 disables disputes.
+    uint256 public disputeBond;
+
+    mapping(bytes32 => IOracleAdapter.Outcome) public proposedOutcome; // set at resolve()
+    mapping(bytes32 => uint64) public proposedAt; // timestamp the outcome was proposed
+    mapping(bytes32 => address) public challengerOf; // nonzero while under dispute
+
     event RelayerUpdated(address indexed relayer, bool allowed);
     event FeeUpdated(uint16 feeBps);
+    event ChallengeWindowUpdated(uint64 window);
+    event DisputeBondUpdated(uint256 bond);
+    event ResolutionProposed(bytes32 indexed marketId, uint8 proposed, uint64 at);
+    event Disputed(bytes32 indexed marketId, address indexed challenger, uint256 bond);
+    event DisputeResolved(bytes32 indexed marketId, address indexed challenger, bool upheld);
 
     modifier onlyAdmin() {
         require(msg.sender == admin, "ENGINE: not admin");
@@ -63,6 +80,16 @@ contract MarketEngine is IMarketEngine {
         require(_feeBps <= 1000, "ENGINE: fee too high"); // max 10%
         feeBps = _feeBps;
         emit FeeUpdated(_feeBps);
+    }
+
+    function setChallengeWindow(uint64 _window) external onlyAdmin {
+        challengeWindow = _window;
+        emit ChallengeWindowUpdated(_window);
+    }
+
+    function setDisputeBond(uint256 _bond) external onlyAdmin {
+        disputeBond = _bond;
+        emit DisputeBondUpdated(_bond);
     }
 
     // ------------------------------------------------------------------- markets
@@ -119,11 +146,81 @@ contract MarketEngine is IMarketEngine {
     function resolve(bytes32 marketId) external {
         Market storage m = _markets[marketId];
         require(m.createdAt != 0, "ENGINE: no market");
-        require(m.status == Status.Open || m.status == Status.Closed, "ENGINE: settled");
+        require(m.status == Status.Open, "ENGINE: not open");
         require(block.timestamp >= m.closeAt, "ENGINE: not closed");
 
         IOracleAdapter.Outcome o = oracle.resolve(marketId);
         require(o != IOracleAdapter.Outcome.Pending, "ENGINE: oracle pending");
+
+        // Record the proposed outcome and open the challenge window.
+        proposedOutcome[marketId] = o;
+        proposedAt[marketId] = uint64(block.timestamp);
+        m.status = Status.Closed; // "proposed, awaiting finalization"
+        emit ResolutionProposed(marketId, uint8(o), uint64(block.timestamp));
+
+        // Fast path: with no challenge window, finalize in the same call so the
+        // market settles atomically (Open -> Resolved/Invalid), as before.
+        if (challengeWindow == 0) _finalize(marketId);
+    }
+
+    /// @notice Lock in a proposed outcome once its challenge window has elapsed
+    ///         and no dispute is open. Permissionless, like resolve().
+    function finalize(bytes32 marketId) external {
+        require(_markets[marketId].status == Status.Closed, "ENGINE: not proposed");
+        require(challengerOf[marketId] == address(0), "ENGINE: disputed");
+        require(
+            block.timestamp >= proposedAt[marketId] + challengeWindow, "ENGINE: window open"
+        );
+        _finalize(marketId);
+    }
+
+    /// @notice Challenge a proposed outcome within its window by posting a bond.
+    ///         Freezes finalization until the admin arbitrates. A rejected
+    ///         challenge forfeits the bond to the treasury; an upheld one refunds it.
+    function dispute(bytes32 marketId) external {
+        require(_markets[marketId].status == Status.Closed, "ENGINE: not proposed");
+        require(challengerOf[marketId] == address(0), "ENGINE: already disputed");
+        require(disputeBond > 0, "ENGINE: disputes off");
+        require(
+            block.timestamp < proposedAt[marketId] + challengeWindow, "ENGINE: window closed"
+        );
+        require(
+            collateral.transferFrom(msg.sender, address(this), disputeBond), "ENGINE: bond"
+        );
+        challengerOf[marketId] = msg.sender;
+        emit Disputed(marketId, msg.sender, disputeBond);
+    }
+
+    /// @notice Admin (arbiter of last resort) resolves a dispute, setting the
+    ///         authoritative outcome and settling the challenger's bond.
+    /// @param upheld true if the challenge was correct (bond refunded), false if
+    ///        rejected (bond forfeited to the treasury).
+    function arbitrate(bytes32 marketId, IOracleAdapter.Outcome finalOutcome, bool upheld)
+        external
+        onlyAdmin
+    {
+        address challenger = challengerOf[marketId];
+        require(challenger != address(0), "ENGINE: no dispute");
+        require(finalOutcome != IOracleAdapter.Outcome.Pending, "ENGINE: pending");
+
+        challengerOf[marketId] = address(0);
+        proposedOutcome[marketId] = finalOutcome; // admin's ruling is authoritative
+
+        if (upheld) {
+            require(collateral.transfer(challenger, disputeBond), "ENGINE: refund bond");
+        } else {
+            collateral.approve(address(treasury), disputeBond);
+            treasury.collectFee(address(collateral), disputeBond);
+        }
+        emit DisputeResolved(marketId, challenger, upheld);
+        _finalize(marketId);
+    }
+
+    /// @dev Apply a (finalized) outcome: void on Invalid or a no-winner push,
+    ///      otherwise mark Resolved and skim the market's snapshotted fee.
+    function _finalize(bytes32 marketId) internal {
+        Market storage m = _markets[marketId];
+        IOracleAdapter.Outcome o = proposedOutcome[marketId];
 
         if (o == IOracleAdapter.Outcome.Invalid) {
             m.status = Status.Invalid;
