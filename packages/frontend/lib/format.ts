@@ -32,3 +32,37 @@ export function impliedYesPercent(yesPool: string, noPool: string): number {
   if (total === 0) return 50;
   return Math.round((y / total) * 100);
 }
+
+export interface PayoutPreview {
+  payout: number; // stake returned + winnings if the side wins
+  profit: number; // winnings only
+  roi: number; // profit / stake, percent
+  pricePct: number; // implied probability of the chosen side after the stake, percent
+}
+
+/**
+ * Parimutuel payout preview for a prospective position. Winners get their stake
+ * back plus a pro-rata share of the (fee-reduced) losing pool — the same math
+ * `MarketEngine.claim` settles with (fee default 2%).
+ */
+export function payoutPreview(
+  yesPool: number,
+  noPool: number,
+  side: "YES" | "NO",
+  stake: number,
+  fee = 0.02
+): PayoutPreview {
+  const sidePool = side === "YES" ? yesPool : noPool;
+  const otherPool = side === "YES" ? noPool : yesPool;
+  if (stake <= 0) {
+    const t = yesPool + noPool;
+    return { payout: 0, profit: 0, roi: 0, pricePct: t ? (sidePool / t) * 100 : 50 };
+  }
+  const winnings = (stake / (sidePool + stake)) * otherPool * (1 - fee);
+  return {
+    payout: stake + winnings,
+    profit: winnings,
+    roi: (winnings / stake) * 100,
+    pricePct: ((sidePool + stake) / (yesPool + noPool + stake)) * 100,
+  };
+}

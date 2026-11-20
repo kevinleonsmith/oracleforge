@@ -9,7 +9,7 @@ import {
   mapProposalRow,
   computeStats,
 } from "../lib/queries.ts";
-import { bpsToPercent, formatUnits, formatCompact, impliedYesPercent } from "../lib/format.ts";
+import { bpsToPercent, formatUnits, formatCompact, impliedYesPercent, payoutPreview } from "../lib/format.ts";
 
 test("sqlOpenMarkets filters open/closed and orders by close", () => {
   const q = sqlOpenMarkets("markets_10200_7", 25);
@@ -67,4 +67,17 @@ test("format helpers", () => {
   assert.equal(formatCompact(48_700_000), "$48.7M");
   assert.equal(impliedYesPercent("3", "1"), 75);
   assert.equal(impliedYesPercent("0", "0"), 50);
+});
+
+test("payoutPreview matches parimutuel settlement (2% fee)", () => {
+  // YES pool 300, NO pool 100, stake 300 on YES:
+  // winnings = 300/(300+300) * 100 * 0.98 = 49; payout = 349
+  const p = payoutPreview(300, 100, "YES", 300);
+  assert.equal(Math.round(p.profit), 49);
+  assert.equal(Math.round(p.payout), 349);
+  assert.ok(p.roi > 16 && p.roi < 17); // 49/300 ~= 16.3%
+  // zero stake -> just the current implied price, no payout
+  const z = payoutPreview(300, 100, "YES", 0);
+  assert.equal(z.payout, 0);
+  assert.equal(Math.round(z.pricePct), 75);
 });
