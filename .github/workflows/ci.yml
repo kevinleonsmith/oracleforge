@@ -28,8 +28,12 @@ jobs:
       - name: Set up Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
+      # Only third-party test dep: PyYAML, for the inference SDL round-trip test
+      # (the test skips cleanly without it; installed here so it actually runs).
+      - name: Install PyYAML
+        run: pip install pyyaml
+
       # Runs every package suite: contracts, ai-market-generator, cartesi,
       # relayer, resolver, archiver, frontend, inference, lit (103 tests).
-      # No install step needed — every suite runs on the stdlib / Foundry alone.
       - name: Run full test suite
         run: npm test

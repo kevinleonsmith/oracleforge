@@ -3,8 +3,6 @@ import os
 import sys
 import unittest
 
-import yaml
-
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "deploy")))
 
 from sdl import build_sdl  # noqa: E402
@@ -50,6 +48,10 @@ class SdlTests(unittest.TestCase):
         self.assertGreater(pricing["amount"], 0)
 
     def test_yaml_roundtrip(self):
+        try:
+            import yaml
+        except ModuleNotFoundError:
+            self.skipTest("pyyaml not installed")
         sdl = build_sdl()
         self.assertEqual(yaml.safe_load(yaml.safe_dump(sdl)), sdl)
 
