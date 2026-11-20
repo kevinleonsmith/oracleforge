@@ -115,14 +115,17 @@ clamps and compares the adapter's rescaled value against `lower`/`upper` directl
 
 ## Status & follow-ups
 
-**Done:** the engine (14 lifecycle/settlement + 2 fuzz properties), the
-**optimistic dispute window** (propose → challenge → finalize → arbitrate, 7
-tests), the scalar oracle interface + mock, and the production
-`ScalarChainlinkAdapter` (16 tests, including an end-to-end settle through the
-engine).
+**Done — the full vertical:**
+- **Engine** (14 lifecycle/settlement + 2 fuzz properties) and its **optimistic
+  dispute window** (propose → challenge → finalize → arbitrate, 7 tests).
+- **Oracle:** the `IScalarOracleAdapter` interface + mock and the production
+  `ScalarChainlinkAdapter` (16 tests, incl. an end-to-end settle through the engine).
+- **Resolver:** `ScalarWatcher` drives the shared `resolve()`/`finalize()` lifecycle
+  from the scalar oracle's `latestValue()`, archiving the settled value (15 tests;
+  `--dry-run --scalar`).
+- **Frontend:** a Scalar Markets panel rendering the band, the pools' **implied
+  settlement value**, and a **live LONG/SHORT payout preview** as you drag a
+  hypothetical settlement point. The payout math (`lib/scalar.ts`) mirrors the
+  contract and is unit-tested (6 tests).
 
-**Not yet wired:**
-- **Resolver** support (the watcher drives only binary `resolve`/`finalize` today;
-  the scalar engine exposes the same propose → finalize shape to drive).
-- **Frontend** rendering (a range slider / implied-value readout instead of
-  YES/NO odds).
+Scalar markets are now at parity with binary across contract → oracle → worker → UI.

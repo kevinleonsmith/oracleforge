@@ -5,8 +5,17 @@ import { formatCompact } from "@/lib/format";
 import { catColor, toUiMarket, type Position, type UiMarket } from "@/lib/ui";
 import type { ResolutionInput } from "@/lib/dispute";
 import { ChallengeStatus } from "./ChallengeStatus";
+import { ScalarMarketCard, type ScalarMarketData } from "./ScalarMarketCard";
 import { ProbabilityChart } from "./ProbabilityChart";
 import { TradeDrawer } from "./TradeDrawer";
+
+// Sample scalar (range) markets for the demo. Static -> deterministic server
+// render (the cards' slider seeds from the pools, so no hydration mismatch).
+const SCALAR_MARKETS: ScalarMarketData[] = [
+  { id: "MKT-0xE71", category: "CRYPTO", question: "Where will ETH close at the end of the quarter?", feed: "ETH/USD", lower: 3000, upper: 5000, unit: "$", longPool: 620, shortPool: 380 },
+  { id: "MKT-0xC90", category: "MACRO", question: "US CPI year-over-year for the reference month?", feed: "ECON/CPI", lower: 2, upper: 5, unit: "%", longPool: 300, shortPool: 500 },
+  { id: "MKT-0xB44", category: "CRYPTO", question: "Average Gnosis gas price over the settlement window?", feed: "GAS/GWEI", lower: 0, upper: 50, unit: "", longPool: 450, shortPool: 450 },
+];
 
 const DEMO_CHALLENGER = "0x7F3aC9d2E1b84465A0cE9f21D8b7c0F3aE62d410";
 
@@ -209,6 +218,27 @@ export function MarketsView({ initialMarkets }: { initialMarkets: Market[] }) {
               ))
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Scalar (range) markets */}
+      <div className="sec">
+        <div className="sec-head">
+          <div>
+            <div className="eyebrow">New Market Type</div>
+            <h2>Scalar (Range) Markets</h2>
+            <p>
+              Numeric questions settled along a continuum, not yes/no. Traders take LONG or SHORT on
+              a band; at settlement the pot is split by where the oracle value lands. Drag a market to
+              see the LONG/SHORT payout at any settlement point.
+            </p>
+          </div>
+          <div className="legend-live"><span className="dot live" /> {SCALAR_MARKETS.length} ranges</div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 11 }}>
+          {SCALAR_MARKETS.map((sm) => (
+            <ScalarMarketCard key={sm.id} m={sm} />
+          ))}
         </div>
       </div>
 

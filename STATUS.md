@@ -3,7 +3,7 @@
 _Last updated: 2026-11-20_
 
 MVP of an autonomous AI prediction-market protocol on Gnosis Chain. **11 packages,
-249 passing tests** (incl. parimutuel settlement fuzzed for its invariants,
+255 passing tests** (incl. parimutuel settlement fuzzed for its invariants,
 stateful solvency proven across randomly-interleaved market histories, and a
 cross-package end-to-end that threads one market through every worker). Every
 off-chain worker, pure-logic layer, smart contract, and
@@ -41,10 +41,10 @@ Akash embeddings ─▶ Cartesi deterministic forecast ─▶ relayer createMark
 | `archiver` | Arweave permanent storage + Tableland `arweave_tx` write-back | Python | **12** | `npm run archive` |
 | `inference` | Akash GPU service (embeddings + drafting) + SDL; `RemoteEmbedder` | Python + Docker | **18** | `npm run inference` |
 | `lit` | token-gated / encrypted private markets (Lit Protocol) | TypeScript | **14** | `npm run lit` |
-| `frontend` | Next.js terminal UI; live Tableland + viem reads, switchable with mock; **optimistic-resolution panel** (live challenge countdown, dispute/finalize) | TypeScript | **20** | `npm run dev` |
+| `frontend` | Next.js terminal UI; live Tableland + viem reads, switchable with mock; **optimistic-resolution panel** (live challenge countdown, dispute/finalize); **scalar-market panel** (band, implied value, live LONG/SHORT payout) | TypeScript | **26** | `npm run dev` |
 | `shared` | Tableland SQL schema + shared TypeScript types | SQL + TS | — | — |
 | `integration` | end-to-end thread across every worker + contract-exact settlement; **anvil devnet** parity vs the real `MarketEngine` | Python + Foundry | **8** (+2 devnet) | `npm run e2e` · `npm run devnet` |
-| | | | **249** | `npm test` |
+| | | | **255** | `npm test` |
 
 ## The determinism boundary (the key design decision)
 
@@ -121,8 +121,11 @@ A proof of this runs in CI: the relayer and inference tests assert the committed
   one. The **resolver** operates it end to end: `ScalarWatcher` reuses the shared
   `resolve()`/`finalize()` lifecycle to drive propose → wait → finalize, reading the
   scalar oracle's `latestValue()` and archiving the settled value
-  (`--dry-run --scalar`). Frontend rendering is the one remaining follow-up. Binary
-  `MarketEngine` is untouched and independent.
+  (`--dry-run --scalar`). The **frontend** renders a Scalar Markets panel — the band,
+  the pools' implied settlement value, and a live LONG/SHORT payout preview as you
+  drag a hypothetical settlement point (payout math in `lib/scalar.ts`, unit-tested).
+  Scalar markets are now at parity with binary across contract → oracle → worker →
+  UI. Binary `MarketEngine` is untouched and independent.
 - Every off-chain worker's logic end to end against stubs/local stores: market
   generation, deterministic forecasting, notice→createMarket mapping (incl. a
   from-scratch keccak256 verified against vectors), resolution planning, content-
@@ -163,7 +166,7 @@ every PR, as three jobs:
 
 | Check | What it does |
 |-------|--------------|
-| `all tests` | Node 22 + Python 3.11 + Foundry + PyYAML, runs `npm test` (all 249 tests) |
+| `all tests` | Node 22 + Python 3.11 + Foundry + PyYAML, runs `npm test` (all 255 tests) |
 | `frontend build` | `npm install` + `next build` in `packages/frontend` — compiles the TSX and type-checks the whole app (the one thing the stdlib test suite can't cover) |
 | `anvil devnet parity` | boots a real anvil node, deploys the actual contracts, and asserts on-chain parimutuel payouts equal the Python `settle()` port (`npm run test:devnet`) |
 
