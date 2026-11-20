@@ -33,6 +33,24 @@ indexed row or an empty state — it never crashes the page.
 | `lib/addresses.ts` | deployment address book (`deployments/*.json` + env override) |
 | `scripts/extract-addresses.mjs` | write the address book from a Foundry broadcast |
 
+## Interactive terminal (client components)
+
+`app/page.tsx` fetches markets/proposals server-side and hands them to `Terminal`,
+a client shell with tab + hash routing (`#markets` / `#simulations` / `#governance`):
+
+| Component | What it does |
+|-----------|--------------|
+| `Terminal` | tabs + `#hash` routing across the three views |
+| `MarketsView` | clickable market cards → trade drawer; live "Your Positions" tracker |
+| `TradeDrawer` | pick YES/NO + stake, live parimutuel **payout preview** (`payoutPreview`), place a demo position |
+| `SimulationExplorer` | sliders (bias/horizon/volatility) re-run a **deterministic** Monte Carlo fan with a stable input hash |
+| `GovernanceView` | proposals with live demo voting + treasury allocation |
+| `ProbabilityChart` | shared SVG line chart (engine + simulation) |
+
+Trading and voting are **local demo state** — nothing is sent on-chain. The payout
+math (`lib/format.ts → payoutPreview`) is the same parimutuel settlement
+`MarketEngine.claim` uses, and is unit-tested (`npm test`).
+
 ## Connect to a deployment
 
 ```bash

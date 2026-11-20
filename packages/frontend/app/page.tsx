@@ -1,5 +1,5 @@
 import { getOpenMarkets, getProtocolStats, getActiveProposals, DATA_SOURCE } from "@/lib/api";
-import { MarketCard } from "@/components/MarketCard";
+import { Terminal } from "@/components/Terminal";
 
 const SOURCE_LABEL = DATA_SOURCE === "chain" ? "Live · Chiado" : "Sample data";
 
@@ -27,43 +27,11 @@ export default async function Home() {
         </div>
       </section>
 
-      <div className="grid">
-        <div className="panel span8">
-          <div className="p-head"><h3>Live Markets</h3></div>
-          <div className="markets">
-            {markets.length > 0 ? (
-              markets.map((m) => <MarketCard key={m.marketId} m={m} />)
-            ) : (
-              <p style={{ color: "var(--muted)", fontSize: 13, gridColumn: "1 / -1" }}>
-                No open markets found{DATA_SOURCE === "chain" ? " on-chain yet — run the relayer to create some." : "."}
-              </p>
-            )}
-          </div>
-        </div>
-        <div className="panel span4">
-          <div className="p-head"><h3>Governance</h3></div>
-          {proposals.map((p) => (
-            <div key={p.proposalId}>
-              <div style={{ fontSize: 13, fontWeight: 500 }}>{p.proposalId} · {p.title}</div>
-              <div className="mono" style={{ fontSize: 10, color: "var(--faint)", margin: "4px 0 12px" }}>
-                quorum {Math.round(p.quorumBps / 100)}% reached
-              </div>
-              {([["For", p.forVotes, "var(--green)"], ["Against", p.againstVotes, "var(--red)"], ["Abstain", p.abstainVotes, "var(--faint)"]] as const).map(([label, v, c]) => (
-                <div key={label} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, marginBottom: 7 }}>
-                  <span style={{ width: 52, color: "var(--muted)" }}>{label}</span>
-                  <div style={{ flex: 1, height: 6, borderRadius: 4, background: "var(--line)", overflow: "hidden" }}>
-                    <i style={{ display: "block", height: "100%", width: `${v}%`, background: c }} />
-                  </div>
-                  <span className="mono" style={{ width: 36, textAlign: "right" }}>{v}%</span>
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
+      <Terminal markets={markets} proposals={proposals} />
 
       <p style={{ color: "var(--faint)", fontSize: 11, margin: "40px 0" }}>
-        Demonstration interface. Markets, balances and forecasts are simulated sample data.
+        Demonstration interface. Markets, balances, trades and votes are simulated sample data —
+        &ldquo;place position&rdquo; and &ldquo;vote&rdquo; are local demos; nothing is sent on-chain.
       </p>
     </main>
   );

@@ -20,7 +20,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <header className="nav">
           <div className="wrap nav-in">
             <div className="brand">◇ ORACLEFORGE</div>
-            <button className="btn" style={{ marginLeft: "auto" }}>Launch Terminal</button>
+            <a className="btn" style={{ marginLeft: "auto" }} href="#markets">Launch Terminal</a>
           </div>
         </header>
         {children}
