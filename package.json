@@ -17,11 +17,12 @@
     "test:relayer": "cd packages/relayer && python3 -m unittest discover -s tests -t .",
     "test:resolver": "cd packages/resolver && python3 -m unittest discover -s tests -t .",
     "test:archiver": "cd packages/archiver && python3 -m unittest discover -s tests -t .",
+    "test:frontend": "cd packages/frontend && npm test",
     "ai": "cd packages/ai-market-generator && python3 -m oracleforge_ai.cli --format table",
     "relay": "cd packages/relayer && python3 -m oracleforge_relayer.cli --dry-run",
     "resolve": "cd packages/resolver && python3 -m oracleforge_resolver.cli --dry-run",
     "archive": "cd packages/archiver && python3 -m oracleforge_archiver.cli --dry-run",
-    "test": "npm run test:contracts && npm run test:ai && npm run test:cartesi && npm run test:relayer && npm run test:resolver && npm run test:archiver"
+    "test": "npm run test:contracts && npm run test:ai && npm run test:cartesi && npm run test:relayer && npm run test:resolver && npm run test:archiver && npm run test:frontend"
   },
   "engines": { "node": ">=20" }
 }

@@ -8,7 +8,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --experimental-strip-types test/queries.test.ts && node --test test/extract.test.mjs",
+    "extract-addresses": "node scripts/extract-addresses.mjs"
   },
   "dependencies": {
     "next": "14.2.15",

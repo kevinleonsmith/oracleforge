@@ -1,5 +1,7 @@
-import { getOpenMarkets, getProtocolStats, getActiveProposals } from "@/lib/api";
+import { getOpenMarkets, getProtocolStats, getActiveProposals, DATA_SOURCE } from "@/lib/api";
 import { MarketCard } from "@/components/MarketCard";
+
+const SOURCE_LABEL = DATA_SOURCE === "chain" ? "Live · Chiado" : "Sample data";
 
 export default async function Home() {
   const [markets, stats, proposals] = await Promise.all([
@@ -11,7 +13,7 @@ export default async function Home() {
   return (
     <main className="wrap">
       <section className="hero">
-        <span className="eyebrow">Autonomous · On-chain · Verifiable</span>
+        <span className="eyebrow">Autonomous · On-chain · Verifiable &nbsp;·&nbsp; {SOURCE_LABEL}</span>
         <h1>Autonomous Intelligence for <em>Predictive Markets</em></h1>
         <p>
           AI-generated prediction markets with deterministic off-chain compute and decentralized
@@ -29,7 +31,13 @@ export default async function Home() {
         <div className="panel span8">
           <div className="p-head"><h3>Live Markets</h3></div>
           <div className="markets">
-            {markets.map((m) => <MarketCard key={m.marketId} m={m} />)}
+            {markets.length > 0 ? (
+              markets.map((m) => <MarketCard key={m.marketId} m={m} />)
+            ) : (
+              <p style={{ color: "var(--muted)", fontSize: 13, gridColumn: "1 / -1" }}>
+                No open markets found{DATA_SOURCE === "chain" ? " on-chain yet — run the relayer to create some." : "."}
+              </p>
+            )}
           </div>
         </div>
         <div className="panel span4">

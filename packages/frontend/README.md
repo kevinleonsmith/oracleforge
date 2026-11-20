@@ -1,0 +1,70 @@
+# OracleForge · Frontend
+
+Next.js 14 terminal UI. Reads markets from **either** a mock data set (design time)
+or **live** from the deployed Chiado contracts + Tableland index — switched by one
+env var, with no page changes.
+
+```
+NEXT_PUBLIC_DATA_SOURCE=mock    # design-time sample data (default)
+NEXT_PUBLIC_DATA_SOURCE=chain   # Tableland index + live on-chain pools/status
+```
+
+## Data flow (chain mode)
+
+```
+ Tableland gateway ──SQL──▶ markets/predictions/proposals rows ──▶ map to domain types
+                                                                      │
+ MarketEngine.getMarket(id) ──live pools/status──▶ hydrate each market┘ ──▶ page
+```
+
+`lib/api.ts` is a thin facade over `mockApi.ts` and `chainApi.ts`. The live client
+queries Tableland over HTTP (read-only, no SDK) for the indexed rows, then refreshes
+each market's mutable fields (`yesPool`/`noPool`/`status`/`outcome`) from the chain
+via viem. Any failure (gateway down, not deployed, RPC hiccup) degrades to the
+indexed row or an empty state — it never crashes the page.
+
+| File | Role |
+|------|------|
+| `lib/api.ts` | facade: picks mock or chain by `NEXT_PUBLIC_DATA_SOURCE` |
+| `lib/queries.ts` | **pure** SQL builders + row→domain mappers + stats (unit-tested) |
+| `lib/format.ts` | **pure** bps/units/compact formatting (unit-tested) |
+| `lib/tableland.ts` | read-only gateway query |
+| `lib/contracts.ts` | viem client + ABI + `readMarketOnchain` |
+| `lib/addresses.ts` | deployment address book (`deployments/*.json` + env override) |
+| `scripts/extract-addresses.mjs` | write the address book from a Foundry broadcast |
+
+## Connect to a deployment
+
+```bash
+# 1) deploy the contracts (packages/contracts)
+cd ../contracts
+forge script script/Deploy.s.sol:Deploy --rpc-url chiado --broadcast --private-key $DEPLOYER_PK
+
+# 2) extract addresses into the frontend's address book
+cd ../frontend
+npm run extract-addresses -- \
+  ../contracts/broadcast/Deploy.s.sol/10200/run-latest.json \
+  deployments/chiado.json --network chiado
+
+# 3) point the app at the chain and run
+export NEXT_PUBLIC_DATA_SOURCE=chain
+export NEXT_PUBLIC_CHAIN=chiado
+export NEXT_PUBLIC_RPC_URL=https://rpc.chiadochain.net
+export NEXT_PUBLIC_TABLELAND_GATEWAY=https://tableland.network
+export NEXT_PUBLIC_MARKETS_TABLE=markets_10200_123   # physical table name
+npm install && npm run dev
+```
+
+Addresses can also be set directly with `NEXT_PUBLIC_MARKET_ENGINE` /
+`NEXT_PUBLIC_ORACLE_ADAPTER` without editing the JSON.
+
+## Tests
+
+The pure data logic (SQL building, row mapping, stats, formatting, broadcast
+extraction) is unit-tested and runs with Node alone — no install, no browser:
+
+```bash
+npm test
+```
+
+The full app build/render (`npm run build`) needs `npm install` and is not run here.

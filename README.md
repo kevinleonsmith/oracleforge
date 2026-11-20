@@ -78,9 +78,11 @@ pokes the permissionless `resolve()` once each oracle is ready. **`packages/arch
 then persists the full artifacts (question text, oracle evidence, model outputs,
 governance) to Arweave and writes the tx id back into the Tableland `*_arweave_tx`
 columns — content-addressed so the permanent record is verifiable (`npm run archive`
-runs a dry-run; it also plugs into the resolver as a `ReportSink`). The frontend
-reads markets through `lib/api.ts` (mock today, Tableland + viem when live) using
-the shared types.
+runs a dry-run; it also plugs into the resolver as a `ReportSink`). The **frontend**
+reads markets through `lib/api.ts`, which switches between mock data and live reads
+(Tableland index + on-chain pool/status hydration via viem) on one env var —
+`NEXT_PUBLIC_DATA_SOURCE=chain` points it at the deployed Chiado contracts (see
+`packages/frontend/README.md`).
 
 ## Deploy (Chiado testnet)
 
@@ -101,7 +103,7 @@ forge script script/Deploy.s.sol:Deploy \
 | Resolution watcher (poke resolve + archive) | ✅ planner + orchestration, 13 passing tests, runnable dry-run |
 | Arweave archival worker | ✅ content-addressed store + Tableland write-back, 12 passing tests, runnable dry-run |
 | Tableland schema + shared types | ✅ defined |
-| Frontend | ✅ scaffold on mock data (needs `npm install`) |
+| Frontend | ✅ live data wiring (Tableland + viem) switchable with mock; 10 passing pure-logic tests |
 | Akash GPU inference · Lit private markets | ⬜ interfaces + env wired, clients TODO |
 | Live Arweave upload + signed Tableland writes | ⬜ interfaces defined (`TurboArweaveClient`, `RegistryTablelandWriter`) |
 | LMSR/AMM pricing, dispute module, staking | ⬜ roadmap |

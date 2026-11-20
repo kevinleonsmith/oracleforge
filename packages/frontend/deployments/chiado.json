@@ -1,0 +1,19 @@
+{
+  "chainId": 10200,
+  "network": "chiado",
+  "note": "Fill from `forge script Deploy` broadcast via scripts/extract-addresses.mjs. Zero addresses mean 'not deployed yet'.",
+  "contracts": {
+    "MarketEngine": "0x0000000000000000000000000000000000000000",
+    "Treasury": "0x0000000000000000000000000000000000000000",
+    "ChainlinkOracleAdapter": "0x0000000000000000000000000000000000000000",
+    "ForgeToken": "0x0000000000000000000000000000000000000000"
+  },
+  "collateral": "0xe91D153E0b41518A2Ce8Dd3D7944Fa863463a97d",
+  "collateralDecimals": 18,
+  "tables": {
+    "markets": "markets",
+    "predictions": "predictions",
+    "confidence_scores": "confidence_scores",
+    "governance_proposals": "governance_proposals"
+  }
+}
