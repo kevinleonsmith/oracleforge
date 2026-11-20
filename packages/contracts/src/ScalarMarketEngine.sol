@@ -20,7 +20,9 @@ import {IERC20} from "./interfaces/IERC20.sol";
 ///         continuous outcome, unlike the binary engine's winner-take-all.
 /// @dev MVP scaffold, not audited. Same hardened posture as MarketEngine
 ///      (two-step admin, zero-address guards, fee snapshotted at creation,
-///      no-winner/one-sided void). v1 settles atomically — no dispute window yet.
+///      no-winner/one-sided void, and an opt-in optimistic dispute window:
+///      propose -> challenge -> finalize, with a bonded dispute and admin
+///      arbitration; a zero challengeWindow keeps atomic settlement).
 contract ScalarMarketEngine {
     enum Side {
         Short, // 0
@@ -29,8 +31,9 @@ contract ScalarMarketEngine {
 
     enum Status {
         Open, // 0
-        Resolved, // 1
-        Invalid // 2 — voided; principals refunded
+        Closed, // 1 — settlement value proposed, awaiting finalization (dispute window)
+        Resolved, // 2
+        Invalid // 3 — voided; principals refunded
     }
 
     struct Market {
@@ -64,13 +67,31 @@ contract ScalarMarketEngine {
     mapping(bytes32 => mapping(address => mapping(Side => uint256))) public stakeOf;
     mapping(bytes32 => mapping(address => bool)) public claimed;
 
+    // --- optimistic resolution + dispute window ---
+    /// @notice Seconds a proposed settlement value can be challenged before it
+    ///         finalizes. 0 (the default) means resolve() finalizes immediately,
+    ///         so the window is strictly opt-in and v1 behavior is preserved.
+    uint64 public challengeWindow;
+    /// @notice Collateral a challenger must bond to dispute. 0 disables disputes.
+    uint256 public disputeBond;
+
+    mapping(bytes32 => int256) public proposedValue; // clamped value proposed at resolve()
+    mapping(bytes32 => uint64) public proposedAt; // timestamp the value was proposed
+    mapping(bytes32 => address) public challengerOf; // nonzero while under dispute
+    mapping(bytes32 => uint256) public bondOf; // exact bond posted for an open dispute
+
     event MarketCreated(bytes32 indexed marketId, bytes32 questionHash, uint64 closeAt, int256 lower, int256 upper);
     event PositionTaken(bytes32 indexed marketId, address indexed account, Side side, uint256 amount);
+    event ResolutionProposed(bytes32 indexed marketId, int256 value, uint64 at);
     event MarketResolved(bytes32 indexed marketId, int256 settledValue, uint256 fee);
     event MarketVoided(bytes32 indexed marketId);
     event Claimed(bytes32 indexed marketId, address indexed account, uint256 payout);
     event RelayerUpdated(address indexed relayer, bool allowed);
     event FeeUpdated(uint16 feeBps);
+    event ChallengeWindowUpdated(uint64 window);
+    event DisputeBondUpdated(uint256 bond);
+    event Disputed(bytes32 indexed marketId, address indexed challenger, uint256 bond);
+    event DisputeResolved(bytes32 indexed marketId, address indexed challenger, bool upheld);
     event AdminTransferStarted(address indexed currentAdmin, address indexed pendingAdmin);
     event AdminTransferred(address indexed previousAdmin, address indexed newAdmin);
 
@@ -122,6 +143,16 @@ contract ScalarMarketEngine {
         emit FeeUpdated(_feeBps);
     }
 
+    function setChallengeWindow(uint64 _window) external onlyAdmin {
+        challengeWindow = _window;
+        emit ChallengeWindowUpdated(_window);
+    }
+
+    function setDisputeBond(uint256 _bond) external onlyAdmin {
+        disputeBond = _bond;
+        emit DisputeBondUpdated(_bond);
+    }
+
     // ------------------------------------------------------------------- markets
 
     function createMarket(
@@ -170,7 +201,10 @@ contract ScalarMarketEngine {
         emit PositionTaken(marketId, msg.sender, side, amount);
     }
 
-    /// @notice Permissionless: settle a closed market from the oracle's value.
+    /// @notice Permissionless: read the oracle and *propose* a settlement value
+    ///         for a closed market. With a nonzero challengeWindow the value must
+    ///         survive the window (or an admin arbitration of a dispute) before
+    ///         finalize() opens claims; with a zero window it settles atomically.
     function resolve(bytes32 marketId) external {
         Market storage m = _markets[marketId];
         require(m.createdAt != 0, "SCALAR: no market");
@@ -182,20 +216,81 @@ contract ScalarMarketEngine {
 
         // A one-sided book has no counterparty to pay the other side, and a
         // clamped value would strand the empty side's share. Void (refund both),
-        // the same push handling as the binary engine's no-winner case.
+        // the same push handling as the binary engine's no-winner case. This is
+        // deterministic (not an oracle-value judgement) so it skips the window.
         if (m.longPool == 0 || m.shortPool == 0) {
             m.status = Status.Invalid;
             emit MarketVoided(marketId);
             return;
         }
 
-        // Clamp into the band and store the settlement value.
-        int256 cv = value < m.lower ? m.lower : (value > m.upper ? m.upper : value);
+        // Propose the clamped value and open the challenge window.
+        int256 cv = _clamp(m.lower, m.upper, value);
+        proposedValue[marketId] = cv;
+        proposedAt[marketId] = uint64(block.timestamp);
+        m.status = Status.Closed; // "value proposed, awaiting finalization"
+        emit ResolutionProposed(marketId, cv, uint64(block.timestamp));
+
+        // Fast path: no window => settle atomically (Open -> Resolved), as in v1.
+        if (challengeWindow == 0) _finalize(marketId);
+    }
+
+    /// @notice Lock in a proposed value once its challenge window has elapsed and
+    ///         no dispute is open. Permissionless, like resolve().
+    function finalize(bytes32 marketId) external {
+        require(_markets[marketId].status == Status.Closed, "SCALAR: not proposed");
+        require(challengerOf[marketId] == address(0), "SCALAR: disputed");
+        require(block.timestamp >= proposedAt[marketId] + challengeWindow, "SCALAR: window open");
+        _finalize(marketId);
+    }
+
+    /// @notice Challenge a proposed value within its window by posting a bond.
+    ///         Freezes finalization until the admin arbitrates. A rejected
+    ///         challenge forfeits the bond to the treasury; an upheld one refunds it.
+    function dispute(bytes32 marketId) external {
+        require(_markets[marketId].status == Status.Closed, "SCALAR: not proposed");
+        require(challengerOf[marketId] == address(0), "SCALAR: already disputed");
+        require(disputeBond > 0, "SCALAR: disputes off");
+        require(block.timestamp < proposedAt[marketId] + challengeWindow, "SCALAR: window closed");
+        require(collateral.transferFrom(msg.sender, address(this), disputeBond), "SCALAR: bond");
+        challengerOf[marketId] = msg.sender;
+        bondOf[marketId] = disputeBond; // snapshot the exact amount posted
+        emit Disputed(marketId, msg.sender, disputeBond);
+    }
+
+    /// @notice Admin (arbiter of last resort) resolves a dispute with the
+    ///         authoritative settlement value and settles the challenger's bond.
+    /// @param upheld true if the challenge was correct (bond refunded), false if
+    ///        rejected (bond forfeited to the treasury).
+    function arbitrate(bytes32 marketId, int256 finalValue, bool upheld) external onlyAdmin {
+        address challenger = challengerOf[marketId];
+        require(challenger != address(0), "SCALAR: no dispute");
+        Market storage m = _markets[marketId];
+
+        challengerOf[marketId] = address(0);
+        uint256 bond = bondOf[marketId];
+        bondOf[marketId] = 0;
+        proposedValue[marketId] = _clamp(m.lower, m.upper, finalValue); // admin's value is authoritative
+
+        if (upheld) {
+            require(collateral.transfer(challenger, bond), "SCALAR: refund bond");
+        } else {
+            collateral.approve(address(treasury), bond);
+            treasury.collectFee(address(collateral), bond);
+        }
+        emit DisputeResolved(marketId, challenger, upheld);
+        _finalize(marketId);
+    }
+
+    /// @dev Apply the proposed value: mark Resolved and skim the market's
+    ///      snapshotted fee from the pot. Both pools are > 0 here (a one-sided
+    ///      book voids at resolve, never reaching a proposal).
+    function _finalize(bytes32 marketId) internal {
+        Market storage m = _markets[marketId];
+        int256 cv = proposedValue[marketId];
         m.settledValue = cv;
         m.status = Status.Resolved;
 
-        // Skim the fee from the whole pot (both sides contribute), at the rate
-        // snapshotted when the market opened.
         uint256 pot = m.longPool + m.shortPool;
         uint256 fee = (pot * m.feeBps) / 10_000;
         if (fee > 0) {
@@ -203,6 +298,11 @@ contract ScalarMarketEngine {
             treasury.collectFee(address(collateral), fee);
         }
         emit MarketResolved(marketId, cv, fee);
+    }
+
+    /// @dev Clamp a value into [lo, hi].
+    function _clamp(int256 lo, int256 hi, int256 v) internal pure returns (int256) {
+        return v < lo ? lo : (v > hi ? hi : v);
     }
 
     /// @notice LONG/SHORT payout pools after the fee, derived purely from the

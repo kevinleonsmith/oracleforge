@@ -105,7 +105,7 @@ contract ScalarMarketEngineTest is MiniTest {
 
         ScalarMarketEngine.Market memory m = engine.getMarket(marketId);
         assertTrue(m.settledValue == 150, "settled value");
-        assertEq(uint256(uint8(m.status)), 1, "resolved");
+        assertEq(uint256(uint8(m.status)), 2, "resolved");
 
         // long side pool = 490, short side pool = 490
         uint256 aliceOut = _claim(marketId, alice); // sole long: 490 * 600/600
@@ -162,7 +162,7 @@ contract ScalarMarketEngineTest is MiniTest {
         _take(marketId, alice, ScalarMarketEngine.Side.Long, 300e18); // no shorts
         _resolveAt(marketId, 150);
         ScalarMarketEngine.Market memory m = engine.getMarket(marketId);
-        assertEq(uint256(uint8(m.status)), 2, "invalid/void");
+        assertEq(uint256(uint8(m.status)), 3, "invalid/void");
         assertEq(_claim(marketId, alice), 300e18, "principal refunded");
         assertEq(collateral.balanceOf(address(treasury)), 0, "no fee on void");
     }

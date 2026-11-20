@@ -78,6 +78,21 @@ At `v = 150`, a trader holding the entire 600 LONG pool receives `490 * 600/600 
 - **Fee is snapshotted** at creation, so an admin can't change the economics of an
   in-flight market (review finding F2).
 
+## Optimistic resolution (opt-in)
+
+Like the binary engine, scalar settlement is optimistic when a nonzero
+`challengeWindow` is set. `resolve()` then only **proposes** the clamped value
+(status `Closed`); anyone may `dispute()` within the window by posting
+`disputeBond` collateral, which freezes the market until the admin `arbitrate()`s.
+An upheld challenge refunds the bond and the admin's value becomes authoritative; a
+rejected one forfeits the bond to the treasury and the proposed value stands. Once
+the window passes with no open dispute, `finalize()` settles and opens claims. A
+zero window keeps atomic settlement (v1 behavior), so the feature is opt-in and
+additive. The exact bond posted is snapshotted per dispute, so changing the global
+`disputeBond` mid-dispute can't mis-refund. A one-sided-book **void** is
+deterministic (not an oracle-value judgement), so it settles immediately and skips
+the window.
+
 ## Oracle
 
 Scalar settlement needs a raw number, not a yes/no, so it uses a separate
@@ -100,13 +115,14 @@ clamps and compares the adapter's rescaled value against `lower`/`upper` directl
 
 ## Status & follow-ups
 
-**Done:** the engine (14 lifecycle/settlement + 2 fuzz properties), the scalar
-oracle interface + mock, and the production `ScalarChainlinkAdapter` (16 tests,
-including an end-to-end settle through the engine).
+**Done:** the engine (14 lifecycle/settlement + 2 fuzz properties), the
+**optimistic dispute window** (propose → challenge → finalize → arbitrate, 7
+tests), the scalar oracle interface + mock, and the production
+`ScalarChainlinkAdapter` (16 tests, including an end-to-end settle through the
+engine).
 
 **Not yet wired:**
-- An **optimistic dispute window** — v1 settles atomically; the binary engine's
-  propose → challenge → finalize flow is the pattern to port.
-- **Resolver** support (the watcher drives only binary `resolve` today).
+- **Resolver** support (the watcher drives only binary `resolve`/`finalize` today;
+  the scalar engine exposes the same propose → finalize shape to drive).
 - **Frontend** rendering (a range slider / implied-value readout instead of
   YES/NO odds).

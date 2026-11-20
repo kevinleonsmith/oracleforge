@@ -3,7 +3,7 @@
 _Last updated: 2026-11-20_
 
 MVP of an autonomous AI prediction-market protocol on Gnosis Chain. **11 packages,
-227 passing tests** (incl. parimutuel settlement fuzzed for its invariants,
+234 passing tests** (incl. parimutuel settlement fuzzed for its invariants,
 stateful solvency proven across randomly-interleaved market histories, and a
 cross-package end-to-end that threads one market through every worker). Every
 off-chain worker, pure-logic layer, smart contract, and
@@ -33,7 +33,7 @@ Akash embeddings ─▶ Cartesi deterministic forecast ─▶ relayer createMark
 
 | Package | Purpose | Lang | Tests | Try it |
 |---------|---------|------|-------|--------|
-| `contracts` | MarketEngine (parimutuel), Treasury, ForgeToken, Chainlink oracle adapter; **fuzzed settlement + stateful solvency invariants**, **optimistic resolution with a bonded dispute window**, **two-step admin/governor rotation**, **every core contract directly reviewed + tested** (engine, Treasury, token, oracle adapter), **scalar (range) market engine** with proportional parimutuel settlement + its Chainlink oracle adapter | Solidity (Foundry) | **101** | `npm run test:contracts` |
+| `contracts` | MarketEngine (parimutuel), Treasury, ForgeToken, Chainlink oracle adapter; **fuzzed settlement + stateful solvency invariants**, **optimistic resolution with a bonded dispute window**, **two-step admin/governor rotation**, **every core contract directly reviewed + tested** (engine, Treasury, token, oracle adapter), **scalar (range) market engine** with proportional parimutuel settlement, its own dispute window + Chainlink oracle adapter | Solidity (Foundry) | **108** | `npm run test:contracts` |
 | `ai-market-generator` | signals → cluster → confidence → deterministic forecast → proposal | Python | **9** | `npm run ai` |
 | `cartesi` | deterministic forecast packaged as a Cartesi Rollups machine (commits notices) | Python + Docker | **9** | `npm run test:cartesi` |
 | `relayer` | Cartesi notices → `createMarket` on Gnosis (keccak + ABI encoding) | Python | **15** | `npm run relay` |
@@ -44,7 +44,7 @@ Akash embeddings ─▶ Cartesi deterministic forecast ─▶ relayer createMark
 | `frontend` | Next.js terminal UI; live Tableland + viem reads, switchable with mock; **optimistic-resolution panel** (live challenge countdown, dispute/finalize) | TypeScript | **20** | `npm run dev` |
 | `shared` | Tableland SQL schema + shared TypeScript types | SQL + TS | — | — |
 | `integration` | end-to-end thread across every worker + contract-exact settlement; **anvil devnet** parity vs the real `MarketEngine` | Python + Foundry | **8** (+2 devnet) | `npm run e2e` · `npm run devnet` |
-| | | | **227** | `npm test` |
+| | | | **234** | `npm test` |
 
 ## The determinism boundary (the key design decision)
 
@@ -115,9 +115,11 @@ A proof of this runs in CI: the relayer and inference tests assert the committed
   `ScalarChainlinkAdapter`, which reports a Chainlink answer rescaled to the band's
   unit (reusing the O1/O3 health logic, and handling mismatched-decimals fallbacks
   without the binary adapter's O2 constraint); an end-to-end test settles an engine
-  market through it. Settles atomically in v1 — the optimistic dispute window and
-  resolver/UI wiring are the noted follow-ups. Binary `MarketEngine` is untouched
-  and independent.
+  market through it. Also carries its own **opt-in optimistic dispute window**
+  (propose → challenge → finalize → admin arbitration, bonded; a zero window keeps
+  atomic settlement), so an admin can override a bad feed value with the authoritative
+  one — resolver/UI wiring are the noted follow-ups. Binary `MarketEngine` is
+  untouched and independent.
 - Every off-chain worker's logic end to end against stubs/local stores: market
   generation, deterministic forecasting, notice→createMarket mapping (incl. a
   from-scratch keccak256 verified against vectors), resolution planning, content-
@@ -158,7 +160,7 @@ every PR, as three jobs:
 
 | Check | What it does |
 |-------|--------------|
-| `all tests` | Node 22 + Python 3.11 + Foundry + PyYAML, runs `npm test` (all 227 tests) |
+| `all tests` | Node 22 + Python 3.11 + Foundry + PyYAML, runs `npm test` (all 234 tests) |
 | `frontend build` | `npm install` + `next build` in `packages/frontend` — compiles the TSX and type-checks the whole app (the one thing the stdlib test suite can't cover) |
 | `anvil devnet parity` | boots a real anvil node, deploys the actual contracts, and asserts on-chain parimutuel payouts equal the Python `settle()` port (`npm run test:devnet`) |
 
