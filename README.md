@@ -22,6 +22,7 @@ oracleforge/
 │  ├─ cartesi/              Cartesi Rollups dApp — deterministic forecast in a RISC-V machine
 │  ├─ relayer/              Cartesi notices → createMarket on Gnosis (keccak + ABI, dry-run)
 │  ├─ resolver/             resolution watcher — pokes resolve() after close, archives outcomes
+│  ├─ archiver/             Arweave archival worker — permanent storage + Tableland write-back
 │  ├─ shared/               Tableland SQL schema + shared TypeScript types
 │  └─ frontend/             Next.js 14 terminal UI (viem + wagmi + Tableland SDK)
 ├─ infra/                   deployment topology notes (Cartesi / Akash / Arweave / Lit)
@@ -73,10 +74,13 @@ From the repo root, `npm test` runs both the contract and AI test suites.
 it takes each proposal, obtains the committed forecast from the Cartesi notice,
 and submits `createMarket` on Gnosis as an authorized relayer (`npm run relay`
 runs this end-to-end with no chain). After markets close, **`packages/resolver`**
-pokes the permissionless `resolve()` once each oracle is ready and archives the
-outcome (`npm run resolve` runs a dry-run tick). The frontend reads markets
-through `lib/api.ts` (mock today, Tableland + viem when live) using the shared
-types.
+pokes the permissionless `resolve()` once each oracle is ready. **`packages/archiver`**
+then persists the full artifacts (question text, oracle evidence, model outputs,
+governance) to Arweave and writes the tx id back into the Tableland `*_arweave_tx`
+columns — content-addressed so the permanent record is verifiable (`npm run archive`
+runs a dry-run; it also plugs into the resolver as a `ReportSink`). The frontend
+reads markets through `lib/api.ts` (mock today, Tableland + viem when live) using
+the shared types.
 
 ## Deploy (Chiado testnet)
 
@@ -95,7 +99,9 @@ forge script script/Deploy.s.sol:Deploy \
 | Cartesi rollup packaging | ✅ machine image + rollup dApp, 9 passing handler tests (see `packages/cartesi`) |
 | Relayer (notices → createMarket) | ✅ keccak256 + ABI encoding + orchestration, 15 passing tests, runnable dry-run |
 | Resolution watcher (poke resolve + archive) | ✅ planner + orchestration, 13 passing tests, runnable dry-run |
+| Arweave archival worker | ✅ content-addressed store + Tableland write-back, 12 passing tests, runnable dry-run |
 | Tableland schema + shared types | ✅ defined |
 | Frontend | ✅ scaffold on mock data (needs `npm install`) |
-| Akash / Arweave / Lit integrations | ⬜ interfaces + env wired, clients TODO |
+| Akash GPU inference · Lit private markets | ⬜ interfaces + env wired, clients TODO |
+| Live Arweave upload + signed Tableland writes | ⬜ interfaces defined (`TurboArweaveClient`, `RegistryTablelandWriter`) |
 | LMSR/AMM pricing, dispute module, staking | ⬜ roadmap |

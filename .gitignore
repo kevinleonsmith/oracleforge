@@ -16,6 +16,10 @@ packages/contracts/lib/
 packages/cartesi/vendor/
 packages/cartesi/.cartesi/
 
+# archiver local store
+packages/archiver/.arweave-store/
+.arweave-store/
+
 # python
 __pycache__/
 *.pyc

@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oracleforge-archiver"
+version = "0.1.0"
+description = "OracleForge Arweave archival worker — permanent storage + Tableland write-back"
+requires-python = ">=3.10"
+# Core (canonical hashing, local store, orchestration) is stdlib-only. Live
+# Arweave upload adds the SDK; Tableland write-back adds web3.
+dependencies = []
+
+[project.optional-dependencies]
+arweave = ["arweave-python-client>=1.0.19", "requests>=2.31"]
+tableland = ["web3>=6.15"]
+dev = []
+
+[project.scripts]
+oracleforge-archiver = "oracleforge_archiver.cli:main"
+
+[tool.setuptools]
+packages = ["oracleforge_archiver"]

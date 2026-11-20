@@ -1,0 +1,4 @@
+# Core (content hashing, local content-addressed store, orchestration, dry-run)
+# is stdlib-only. Live operation adds:
+#   pip install -e ".[arweave,tableland]"
+# arweave-python-client + requests (upload) and web3 (signed Tableland write-back).
