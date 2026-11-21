@@ -3,7 +3,7 @@
 _Last updated: 2026-11-20_
 
 MVP of an autonomous AI prediction-market protocol on Gnosis Chain. **11 packages,
-376 passing tests** (incl. parimutuel settlement fuzzed for its invariants,
+382 passing tests** (incl. parimutuel settlement fuzzed for its invariants,
 stateful solvency proven across randomly-interleaved market histories, and a
 cross-package end-to-end that threads one market through every worker). Every
 off-chain worker, pure-logic layer, smart contract, and
@@ -41,10 +41,10 @@ Akash embeddings ─▶ Cartesi deterministic forecast ─▶ relayer createMark
 | `archiver` | Arweave permanent storage + Tableland `arweave_tx` write-back | Python | **12** | `npm run archive` |
 | `inference` | Akash GPU service (embeddings + drafting) + SDL; `RemoteEmbedder` | Python + Docker | **18** | `npm run inference` |
 | `lit` | token-gated / encrypted private markets (Lit Protocol) | TypeScript | **14** | `npm run lit` |
-| `frontend` | Next.js terminal UI; live Tableland + viem reads, switchable with mock; **optimistic-resolution panel** (live challenge countdown, dispute/finalize); **scalar-market panel** (band, implied value, live LONG/SHORT payout) | TypeScript | **26** | `npm run dev` |
+| `frontend` | Next.js terminal UI; live Tableland + viem reads, switchable with mock; **optimistic-resolution panel** (live challenge countdown, dispute/finalize); **scalar-market panel** (band, implied value, live LONG/SHORT payout); **categorical-market panel** (per-outcome implied probabilities, winner-take-all payout preview) | TypeScript | **32** | `npm run dev` |
 | `shared` | Tableland SQL schema + shared TypeScript types | SQL + TS | — | — |
 | `integration` | end-to-end thread across every worker + contract-exact settlement (binary + scalar + categorical ports); **anvil devnet** parity vs the real `MarketEngine`, `ScalarMarketEngine` **and `CategoricalMarketEngine`** | Python + Foundry | **18** (+8 devnet) | `npm run e2e` · `npm run devnet*` |
-| | | | **376** | `npm test` |
+| | | | **382** | `npm test` |
 
 ## The determinism boundary (the key design decision)
 
@@ -152,8 +152,12 @@ A proof of this runs in CI: the relayer and inference tests assert the committed
   to end. Settlement can read a real feed via `CategoricalChainlinkAdapter`, which
   reports the winning index a Functions consumer posts (sharing the health posture,
   but treating `0` as a valid index and an overflowing answer as the void sentinel);
-  an end-to-end test settles a real engine market through it. A UI panel follows, as
-  it did for the scalar engine. Binary and scalar engines are untouched and independent.
+  an end-to-end test settles a real engine market through it. The **frontend** renders
+  a Categorical Markets panel — each outcome's book-implied probability as a bar, and a
+  winner-take-all payout preview (including the sole-funded-outcome void) for the picked
+  outcome (math in `lib/categorical.ts`, unit-tested). So categorical markets now reach
+  full parity with binary and scalar across contract → oracle → worker → UI. Binary and
+  scalar engines are untouched and independent.
 - Every off-chain worker's logic end to end against stubs/local stores: market
   generation, deterministic forecasting, notice→createMarket mapping (incl. a
   from-scratch keccak256 verified against vectors), resolution planning, content-
@@ -199,7 +203,7 @@ every PR, as three jobs:
 
 | Check | What it does |
 |-------|--------------|
-| `all tests` | Node 22 + Python 3.11 + Foundry + PyYAML, runs `npm test` (all 376 tests) |
+| `all tests` | Node 22 + Python 3.11 + Foundry + PyYAML, runs `npm test` (all 382 tests) |
 | `frontend build` | `npm install` + `next build` in `packages/frontend` — compiles the TSX and type-checks the whole app (the one thing the stdlib test suite can't cover) |
 | `anvil devnet parity` | boots a real anvil node, deploys the actual contracts, and asserts on-chain payouts equal the Python ports — binary `MarketEngine` vs `settle()`, `ScalarMarketEngine` vs `scalar_settle()`, and `CategoricalMarketEngine` vs `categorical_settle()` (`npm run test:devnet`) |
 

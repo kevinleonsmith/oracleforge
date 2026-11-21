@@ -137,9 +137,16 @@ one, or an admin can deliberately void by arbitrating an out-of-range index.
   invalid sentinel (void). So categorical settlement is checked against the contract
   it mirrors, in CI (`npm run test:devnet`), exactly as the binary and scalar engines are.
 
-So categorical markets are now **created and settled by the workers** end to end,
-on top of the contract engine and its dispute window, and the settlement math is
-proven on-chain — not just in the port and fuzz tests.
+- **Frontend:** a Categorical Markets panel (`components/CategoricalMarketCard.tsx`)
+  renders each outcome as a row — its book-implied probability (the pool's share of the
+  pot) as a bar you can click to price — and previews the winner-take-all payout for a
+  demo stake on the picked outcome, including the sole-funded-outcome **void** (push,
+  stake refunded). The math lives in `lib/categorical.ts` (`impliedProbabilities`,
+  `categoricalPayoutPreview`, `favorite`), a pure mirror of the contract's claim,
+  unit-tested with `node --test` (6 tests, incl. the docs worked example reproduced to
+  the unit). So categorical markets now reach **full parity with binary and scalar**
+  across contract → oracle → worker → UI.
 
-**Next (the rest of the vertical, as it was built out for scalar):**
-- a **frontend** panel (per-outcome pools, implied probabilities, payout preview).
+So categorical markets are now **created and settled by the workers** end to end, on
+top of the contract engine and its dispute window, with the settlement math proven
+on-chain and surfaced in the UI — the full vertical, as it was built out for scalar.

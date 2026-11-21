@@ -6,6 +6,7 @@ import { catColor, toUiMarket, type Position, type UiMarket } from "@/lib/ui";
 import type { ResolutionInput } from "@/lib/dispute";
 import { ChallengeStatus } from "./ChallengeStatus";
 import { ScalarMarketCard, type ScalarMarketData } from "./ScalarMarketCard";
+import { CategoricalMarketCard, type CategoricalMarketData } from "./CategoricalMarketCard";
 import { ProbabilityChart } from "./ProbabilityChart";
 import { TradeDrawer } from "./TradeDrawer";
 
@@ -15,6 +16,39 @@ const SCALAR_MARKETS: ScalarMarketData[] = [
   { id: "MKT-0xE71", category: "CRYPTO", question: "Where will ETH close at the end of the quarter?", feed: "ETH/USD", lower: 3000, upper: 5000, unit: "$", longPool: 620, shortPool: 380 },
   { id: "MKT-0xC90", category: "MACRO", question: "US CPI year-over-year for the reference month?", feed: "ECON/CPI", lower: 2, upper: 5, unit: "%", longPool: 300, shortPool: 500 },
   { id: "MKT-0xB44", category: "CRYPTO", question: "Average Gnosis gas price over the settlement window?", feed: "GAS/GWEI", lower: 0, upper: 50, unit: "", longPool: 450, shortPool: 450 },
+];
+
+// Sample categorical (N-outcome) markets for the demo. Static -> deterministic
+// server render (the cards seed their picked outcome from the pools).
+const CATEGORICAL_MARKETS: CategoricalMarketData[] = [
+  {
+    id: "MKT-0xD10", category: "GEO", feed: "FUNCTIONS/ELECTION",
+    question: "Which party wins the most seats in the general election?",
+    outcomes: [
+      { label: "Progressive", pool: 820 },
+      { label: "Conservative", pool: 640 },
+      { label: "Centrist", pool: 410 },
+      { label: "Other", pool: 130 },
+    ],
+  },
+  {
+    id: "MKT-0xD24", category: "CRYPTO", feed: "FUNCTIONS/SPORTS",
+    question: "Which club lifts the title this season?",
+    outcomes: [
+      { label: "North City", pool: 1100 },
+      { label: "Rivertown", pool: 500 },
+      { label: "Harbor United", pool: 300 },
+    ],
+  },
+  {
+    id: "MKT-0xD37", category: "MACRO", feed: "FUNCTIONS/RATES",
+    question: "What is the central bank's next rate decision?",
+    outcomes: [
+      { label: "Cut 25bps", pool: 360 },
+      { label: "Hold", pool: 900 },
+      { label: "Hike 25bps", pool: 240 },
+    ],
+  },
 ];
 
 const DEMO_CHALLENGER = "0x7F3aC9d2E1b84465A0cE9f21D8b7c0F3aE62d410";
@@ -238,6 +272,27 @@ export function MarketsView({ initialMarkets }: { initialMarkets: Market[] }) {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 11 }}>
           {SCALAR_MARKETS.map((sm) => (
             <ScalarMarketCard key={sm.id} m={sm} />
+          ))}
+        </div>
+      </div>
+
+      {/* Categorical (N-outcome) markets */}
+      <div className="sec">
+        <div className="sec-head">
+          <div>
+            <div className="eyebrow">New Market Type</div>
+            <h2>Categorical (N-outcome) Markets</h2>
+            <p>
+              &ldquo;Which one?&rdquo; questions across N mutually-exclusive outcomes — the winning
+              pool takes the whole losing pot, pro-rata. Each bar is an outcome&apos;s book-implied
+              probability; pick one to see the winner-take-all payout for a demo stake.
+            </p>
+          </div>
+          <div className="legend-live"><span className="dot live" /> {CATEGORICAL_MARKETS.length} races</div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 11 }}>
+          {CATEGORICAL_MARKETS.map((cm) => (
+            <CategoricalMarketCard key={cm.id} m={cm} />
           ))}
         </div>
       </div>
