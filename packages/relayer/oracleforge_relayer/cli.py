@@ -88,6 +88,19 @@ def _print_table(results) -> None:
             print(f"{'':<10} └─ {r.detail}")
 
 
+def _print_index(relayer) -> None:
+    """Surface the Tableland index SQL the relay just built (markets + predictions
+    INSERTs), so a dry-run shows exactly what would be written — the creation-time
+    counterpart to the resolver's --tableland oracle_reports output."""
+    sink = getattr(relayer, "index_sink", None)
+    stmts = getattr(sink, "statements", []) if sink else []
+    print("\nindex -> Tableland (would sign & send):")
+    if not stmts:
+        print("  (no index rows — nothing submitted)")
+    for s in stmts:
+        print(f"  {s}")
+
+
 def main(argv=None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     ap = argparse.ArgumentParser(prog="oracleforge-relayer")
@@ -98,6 +111,8 @@ def main(argv=None) -> int:
     ap.add_argument("--proposals", help="path to a proposals JSON file (else run the generator)")
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--min-confidence", type=float, default=0.45)
+    ap.add_argument("--index", action="store_true",
+                    help="also print the Tableland index SQL (markets + predictions INSERTs)")
     args = ap.parse_args(argv)
 
     from .config import Config
@@ -117,6 +132,8 @@ def main(argv=None) -> int:
         _print_scalar_table(results)
         submitted = sum(1 for r in results if r.status == "submitted")
         print(f"\n{submitted}/{len(results)} scalar market(s) would be submitted (dry-run).")
+        if args.index:
+            _print_index(relayer)
         return 0
 
     # Categorical dry-run demo: map sample N-outcome markets to creations.
@@ -129,6 +146,8 @@ def main(argv=None) -> int:
         _print_categorical_table(results)
         submitted = sum(1 for r in results if r.status == "submitted")
         print(f"\n{submitted}/{len(results)} categorical market(s) would be submitted (dry-run).")
+        if args.index:
+            _print_index(relayer)
         return 0
 
     # proposals
@@ -167,6 +186,8 @@ def main(argv=None) -> int:
     _print_table(results)
     submitted = sum(1 for r in results if r.status == "submitted")
     print(f"\n{submitted}/{len(results)} market(s) {'submitted' if live else 'would be submitted (dry-run)'}.")
+    if args.index:
+        _print_index(relayer)
     return 0
 
 

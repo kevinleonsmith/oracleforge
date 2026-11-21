@@ -53,6 +53,9 @@ python3 -m oracleforge_relayer.cli --dry-run --categorical
 # relay a saved proposal set
 python3 -m oracleforge_relayer.cli --proposals proposals.json --dry-run
 
+# also print the Tableland index SQL that would be written (markets + predictions)
+python3 -m oracleforge_relayer.cli --dry-run --index
+
 # tests (stdlib only — keccak vectors, ABI layout, mapping, orchestration)
 python3 -m unittest discover -s tests -t .
 ```
