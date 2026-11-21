@@ -10,17 +10,29 @@ const BROADCAST = {
     { transactionType: "CREATE", contractName: "ForgeToken", contractAddress: "0xBBb0000000000000000000000000000000000002" },
     { transactionType: "CREATE", contractName: "ChainlinkOracleAdapter", contractAddress: "0xCCc0000000000000000000000000000000000003" },
     { transactionType: "CREATE", contractName: "MarketEngine", contractAddress: "0xDDd0000000000000000000000000000000000004" },
+    { transactionType: "CREATE", contractName: "ScalarChainlinkAdapter", contractAddress: "0xEEe0000000000000000000000000000000000005" },
+    { transactionType: "CREATE", contractName: "ScalarMarketEngine", contractAddress: "0xFFf0000000000000000000000000000000000006" },
+    { transactionType: "CREATE", contractName: "CategoricalChainlinkAdapter", contractAddress: "0x1110000000000000000000000000000000000007" },
+    { transactionType: "CREATE", contractName: "CategoricalMarketEngine", contractAddress: "0x2220000000000000000000000000000000000008" },
     { transactionType: "CALL", contractName: "ChainlinkOracleAdapter", contractAddress: "0xCCc0000000000000000000000000000000000003" },
   ],
 };
 
-test("extracts all four contract addresses, lowercased", () => {
+test("extracts the binary contract addresses, lowercased", () => {
   const book = extractAddresses(BROADCAST, { network: "chiado" });
   assert.equal(book.chainId, 10200);
   assert.equal(book.contracts.MarketEngine, "0xddd0000000000000000000000000000000000004");
   assert.equal(book.contracts.Treasury, "0xaaa0000000000000000000000000000000000001");
   assert.equal(book.contracts.ForgeToken, "0xbbb0000000000000000000000000000000000002");
   assert.equal(book.contracts.ChainlinkOracleAdapter, "0xccc0000000000000000000000000000000000003");
+});
+
+test("extracts the scalar + categorical engines and their adapters", () => {
+  const book = extractAddresses(BROADCAST, { network: "chiado" });
+  assert.equal(book.contracts.ScalarChainlinkAdapter, "0xeee0000000000000000000000000000000000005");
+  assert.equal(book.contracts.ScalarMarketEngine, "0xfff0000000000000000000000000000000000006");
+  assert.equal(book.contracts.CategoricalChainlinkAdapter, "0x1110000000000000000000000000000000000007");
+  assert.equal(book.contracts.CategoricalMarketEngine, "0x2220000000000000000000000000000000000008");
 });
 
 test("missing contracts stay zero; CALLs ignored", () => {

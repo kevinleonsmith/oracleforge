@@ -8,7 +8,16 @@
 // The pure `extractAddresses` is unit-tested; the CLI part just does file I/O.
 import { readFileSync, writeFileSync } from "node:fs";
 
-const WANTED = ["MarketEngine", "Treasury", "ChainlinkOracleAdapter", "ForgeToken"];
+const WANTED = [
+  "MarketEngine",
+  "Treasury",
+  "ChainlinkOracleAdapter",
+  "ForgeToken",
+  "ScalarMarketEngine",
+  "ScalarChainlinkAdapter",
+  "CategoricalMarketEngine",
+  "CategoricalChainlinkAdapter",
+];
 
 /** Build a deployment book from a parsed Foundry broadcast object. */
 export function extractAddresses(broadcast, opts = {}) {

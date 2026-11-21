@@ -11,6 +11,10 @@ export interface Deployment {
     Treasury: Hex;
     ChainlinkOracleAdapter: Hex;
     ForgeToken: Hex;
+    ScalarMarketEngine: Hex;
+    ScalarChainlinkAdapter: Hex;
+    CategoricalMarketEngine: Hex;
+    CategoricalChainlinkAdapter: Hex;
   };
   collateral: Hex;
   collateralDecimals: number;
@@ -33,6 +37,10 @@ export function getDeployment(chainId = 10200): Deployment {
       MarketEngine: (env("NEXT_PUBLIC_MARKET_ENGINE") as Hex) ?? base.contracts.MarketEngine,
       ChainlinkOracleAdapter:
         (env("NEXT_PUBLIC_ORACLE_ADAPTER") as Hex) ?? base.contracts.ChainlinkOracleAdapter,
+      ScalarMarketEngine:
+        (env("NEXT_PUBLIC_SCALAR_ENGINE") as Hex) ?? base.contracts.ScalarMarketEngine,
+      CategoricalMarketEngine:
+        (env("NEXT_PUBLIC_CATEGORICAL_ENGINE") as Hex) ?? base.contracts.CategoricalMarketEngine,
     },
     collateral: (env("NEXT_PUBLIC_COLLATERAL") as Hex) ?? base.collateral,
     tables: {

@@ -54,11 +54,12 @@ math (`lib/format.ts → payoutPreview`) is the same parimutuel settlement
 ## Connect to a deployment
 
 ```bash
-# 1) deploy the contracts (packages/contracts)
+# 1) deploy the contracts (packages/contracts) — one run brings up all three
+#    engines (binary, scalar, categorical) + their oracle adapters
 cd ../contracts
 forge script script/Deploy.s.sol:Deploy --rpc-url chiado --broadcast --private-key $DEPLOYER_PK
 
-# 2) extract addresses into the frontend's address book
+# 2) extract addresses into the frontend's address book (captures all three engines)
 cd ../frontend
 npm run extract-addresses -- \
   ../contracts/broadcast/Deploy.s.sol/10200/run-latest.json \

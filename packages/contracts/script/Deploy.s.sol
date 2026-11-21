@@ -5,38 +5,89 @@ import {ForgeToken} from "../src/ForgeToken.sol";
 import {Treasury} from "../src/Treasury.sol";
 import {ChainlinkOracleAdapter} from "../src/oracle/ChainlinkOracleAdapter.sol";
 import {MarketEngine} from "../src/MarketEngine.sol";
+import {ScalarChainlinkAdapter} from "../src/oracle/ScalarChainlinkAdapter.sol";
+import {ScalarMarketEngine} from "../src/ScalarMarketEngine.sol";
+import {CategoricalChainlinkAdapter} from "../src/oracle/CategoricalChainlinkAdapter.sol";
+import {CategoricalMarketEngine} from "../src/CategoricalMarketEngine.sol";
 
-/// @notice Deployment for Gnosis Chain / Chiado testnet.
+/// @notice Deployment for Gnosis Chain / Chiado testnet. Brings up the shared
+///         infrastructure (Treasury + ForgeToken) and all three market engines —
+///         binary, scalar, and categorical — each with its own Chainlink oracle
+///         adapter, bound one-to-one via initEngine, and all sharing the one
+///         Treasury and collateral.
 /// @dev Run with:
 ///   forge script script/Deploy.s.sol:Deploy \
 ///     --rpc-url chiado --broadcast --private-key $DEPLOYER_PK
 ///
 /// This is a plain contract (not forge-std's Script) so the repo builds with no
 /// external library. `forge script` executes the `run()` entrypoint; wrap the
-/// body in startBroadcast via the cheatcode address when broadcasting.
+/// body in startBroadcast via the cheatcode address when broadcasting. The
+/// deployed addresses are also stored in public vars so `Deploy.t.sol` can run
+/// the same logic under `forge test` and assert the whole topology is wired.
 contract Deploy {
     // Cheatcode handle for broadcasting (filled by forge script).
     address constant VM = 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D;
 
-    function run() external returns (address token, address treasury, address oracle, address engine) {
+    // --- deployed addresses (set by run(), read by the deployment test) ---
+    address public token;
+    address public treasury;
+    address public collateral;
+
+    address public binaryOracle;
+    address public binaryEngine;
+    address public scalarOracle;
+    address public scalarEngine;
+    address public categoricalOracle;
+    address public categoricalEngine;
+
+    /// @return binaryEngine_ scalarEngine_ categoricalEngine_ the three engines,
+    ///         sharing the Treasury and collateral recorded in the public vars.
+    function run()
+        external
+        returns (address binaryEngine_, address scalarEngine_, address categoricalEngine_)
+    {
         // governor/admin/minter default to the broadcasting EOA; swap for a
         // Gnosis Safe / timelock before mainnet.
         address gov = msg.sender;
 
         // Collateral is a canonical stable on Gnosis (e.g. WXDAI). Pass via env.
-        address collateral = vmEnvAddressOr("COLLATERAL", address(0xe91D153E0b41518A2Ce8Dd3D7944Fa863463a97d)); // WXDAI
+        address col = vmEnvAddressOr("COLLATERAL", address(0xe91D153E0b41518A2Ce8Dd3D7944Fa863463a97d)); // WXDAI
 
         _broadcast();
 
+        // Shared infrastructure.
         Treasury t = new Treasury(gov);
         ForgeToken f = new ForgeToken(gov, address(t), 30_000_000e18); // 30M genesis to treasury
-        ChainlinkOracleAdapter o = new ChainlinkOracleAdapter();
-        MarketEngine e = new MarketEngine(collateral, address(o), address(t), gov);
-        o.initEngine(address(e));
+
+        // Binary engine + its oracle adapter.
+        ChainlinkOracleAdapter bo = new ChainlinkOracleAdapter();
+        MarketEngine be = new MarketEngine(col, address(bo), address(t), gov);
+        bo.initEngine(address(be));
+
+        // Scalar (range) engine + its oracle adapter.
+        ScalarChainlinkAdapter so = new ScalarChainlinkAdapter();
+        ScalarMarketEngine se = new ScalarMarketEngine(col, address(so), address(t), gov);
+        so.initEngine(address(se));
+
+        // Categorical (N-outcome) engine + its oracle adapter.
+        CategoricalChainlinkAdapter co = new CategoricalChainlinkAdapter();
+        CategoricalMarketEngine ce = new CategoricalMarketEngine(col, address(co), address(t), gov);
+        co.initEngine(address(ce));
 
         _stopBroadcast();
 
-        return (address(f), address(t), address(o), address(e));
+        // Record for the deployment test and the broadcast logs.
+        token = address(f);
+        treasury = address(t);
+        collateral = col;
+        binaryOracle = address(bo);
+        binaryEngine = address(be);
+        scalarOracle = address(so);
+        scalarEngine = address(se);
+        categoricalOracle = address(co);
+        categoricalEngine = address(ce);
+
+        return (address(be), address(se), address(ce));
     }
 
     // --- minimal cheatcode shims (avoid importing forge-std) ---
