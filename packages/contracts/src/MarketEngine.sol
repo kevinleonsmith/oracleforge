@@ -45,6 +45,7 @@ contract MarketEngine is IMarketEngine {
     mapping(bytes32 => IOracleAdapter.Outcome) public proposedOutcome; // set at resolve()
     mapping(bytes32 => uint64) public proposedAt; // timestamp the outcome was proposed
     mapping(bytes32 => address) public challengerOf; // nonzero while under dispute
+    mapping(bytes32 => uint256) public bondOf; // exact bond posted for an open dispute
 
     event RelayerUpdated(address indexed relayer, bool allowed);
     event FeeUpdated(uint16 feeBps);
@@ -217,6 +218,7 @@ contract MarketEngine is IMarketEngine {
             collateral.transferFrom(msg.sender, address(this), disputeBond), "ENGINE: bond"
         );
         challengerOf[marketId] = msg.sender;
+        bondOf[marketId] = disputeBond; // snapshot the exact amount posted
         emit Disputed(marketId, msg.sender, disputeBond);
     }
 
@@ -233,13 +235,15 @@ contract MarketEngine is IMarketEngine {
         require(finalOutcome != IOracleAdapter.Outcome.Pending, "ENGINE: pending");
 
         challengerOf[marketId] = address(0);
+        uint256 bond = bondOf[marketId];
+        bondOf[marketId] = 0;
         proposedOutcome[marketId] = finalOutcome; // admin's ruling is authoritative
 
         if (upheld) {
-            require(collateral.transfer(challenger, disputeBond), "ENGINE: refund bond");
+            require(collateral.transfer(challenger, bond), "ENGINE: refund bond");
         } else {
-            collateral.approve(address(treasury), disputeBond);
-            treasury.collectFee(address(collateral), disputeBond);
+            collateral.approve(address(treasury), bond);
+            treasury.collectFee(address(collateral), bond);
         }
         emit DisputeResolved(marketId, challenger, upheld);
         _finalize(marketId);

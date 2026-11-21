@@ -147,6 +147,54 @@ contract MarketEngineDisputeTest is MiniTest {
         engine.claim(id); // the YES side lost
     }
 
+    /// The bond is snapshotted at dispute time: raising the global disputeBond
+    /// after a challenge is open must not change what a rejected challenge forfeits.
+    /// (Without the bondOf snapshot the engine would forfeit the mutated global,
+    /// draining the pot to over-pay the treasury.)
+    function test_dispute_rejected_forfeitsPostedBond_notMutatedGlobal() public {
+        bytes32 id = _proposeYes();
+        _postBond(charlie, id); // posts BOND (100e18)
+        assertEq(engine.bondOf(id), BOND, "bond snapshotted");
+
+        // Admin raises the global bond 5x while the dispute is open.
+        vm.prank(admin);
+        engine.setDisputeBond(5 * BOND);
+
+        vm.prank(admin);
+        engine.arbitrate(id, IOracleAdapter.Outcome.Yes, false); // reject
+
+        assertEq(engine.bondOf(id), 0, "bond cleared");
+        assertEq(
+            treasury.reserves(OPS, address(collateral)),
+            20e18 + BOND,
+            "fee + the POSTED bond, not the mutated global"
+        );
+        // Winners are still paid in full from the untouched pot.
+        vm.prank(alice);
+        assertEq(engine.claim(id), 1980e18, "YES winner paid from the intact pot");
+    }
+
+    /// The mirror: lowering the global bond after a challenge is open must not
+    /// short the refund of an upheld challenge — the challenger gets back exactly
+    /// what they posted.
+    function test_dispute_upheld_refundsPostedBond_notMutatedGlobal() public {
+        bytes32 id = _proposeYes();
+        _postBond(charlie, id); // posts BOND (100e18)
+
+        // Admin slashes the global bond while the dispute is open.
+        vm.prank(admin);
+        engine.setDisputeBond(1e18);
+
+        uint256 charlieBefore = collateral.balanceOf(charlie);
+        vm.prank(admin);
+        engine.arbitrate(id, IOracleAdapter.Outcome.No, true); // uphold
+
+        assertEq(
+            collateral.balanceOf(charlie) - charlieBefore, BOND, "refunded the POSTED bond, in full"
+        );
+        assertEq(treasury.reserves(OPS, address(collateral)), 20e18, "only the fee, bond refunded");
+    }
+
     /// Disputes are only possible inside the window.
     function test_dispute_afterWindow_reverts() public {
         bytes32 id = _proposeYes();

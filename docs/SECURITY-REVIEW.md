@@ -20,9 +20,10 @@ pass looks for what those don't assert.
 | F5 | Low | **Fixed** | No admin rotation; admin-key loss was unrecoverable |
 | F6 | Info | **Fixed** | Constructor missing zero-address checks |
 | F7 | Info | Verified safe | No `ReentrancyGuard` (sound today via CEI + trusted token) |
+| F8 | Low | **Fixed** | Dispute bond settled at the mutable global, not the amount posted |
 
-Every actionable finding (F1–F6) is now fixed in-tree with a regression test; F7 is
-a documented no-op that holds under the current trusted-collateral assumption. The
+Every actionable finding (F1–F6, F8) is now fixed in-tree with a regression test; F7
+is a documented no-op that holds under the current trusted-collateral assumption. The
 remaining residual risk is the one called out under F3/F5 — arbitration and the
 admin role are a single trusted key, the expected MVP posture, with the production
 path (a decentralized court, a Safe/timelock successor) noted inline.
@@ -130,6 +131,30 @@ ERC-20 fixed at construction. A reentrant `claim` hits the `ENGINE: claimed`
 guard; `takePosition` requires `Status.Open` so a resolved market can't be
 re-entered to mint stake. No guard needed today — but any move to a
 transfer-hooking collateral (ERC-777/-1363) would require revisiting this.
+
+### F8 — Dispute bond settled at the mutable global, not the amount posted _(Low, fixed)_
+
+`dispute()` pulled in `disputeBond` (the global) as the challenger's bond, but
+`arbitrate()` refunded or forfeited the *current* `disputeBond` at settlement time —
+reading the global twice. Because `setDisputeBond` has no guard against changing the
+bond while a challenge is open, an admin raising it mid-dispute would make a rejected
+challenge forfeit **more than was posted** (draining the commingled pot to over-pay
+the treasury, breaking solvency), and lowering it would **short the refund** of an
+upheld challenge, stranding the remainder. The scalar and categorical engines already
+guarded this by snapshotting the posted bond; the binary engine was the outlier.
+
+- **Fix:** the engine now snapshots the posted amount into `bondOf[marketId]` at
+  `dispute()` and settles that exact amount at `arbitrate()` (zeroing it), so a
+  mutated global bond can never mis-settle an open dispute — identical to the other
+  two engines.
+- **Tests:** two regression tests (`test_dispute_rejected_forfeitsPostedBond_notMutatedGlobal`,
+  `test_dispute_upheld_refundsPostedBond_notMutatedGlobal`) raise/slash the global bond
+  under an open dispute and assert the posted amount is what settles. A new
+  **dispute/bond stateful invariant** (`MarketEngineDisputeInvariant.t.sol`) drives the
+  full propose/dispute/arbitrate/finalize lifecycle with a `churnBond` action
+  rewriting the global bond under open challenges, and asserts solvency holds across
+  any history (`engine + paid + treasury == deposited + bonds`). Reverting the fix
+  makes that invariant fail — confirming it has teeth.
 
 ## Treasury & ForgeToken — focused pass
 
