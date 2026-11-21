@@ -72,6 +72,17 @@ uses a separate `ICategoricalOracleAdapter`
 unit tests (`set` names the winner, `setInvalid` reports the void sentinel,
 `clear` marks not-yet-ready).
 
+`CategoricalChainlinkAdapter` is the production adapter: it reads a feed (e.g. a
+Chainlink Functions consumer that posts a match/election/award result as an
+integer) and reports that winning index. It shares the binary/scalar adapters'
+health posture with one categorical twist — `0` is a **valid** outcome index, so
+only a *negative* answer is rejected (never `== 0`), alongside a zero timestamp and
+staleness (`maxStale == 0` disables it). An answer that overflows `uint8` is out of
+any valid range, so it is reported as the invalid sentinel `0xFF` and the engine
+voids (the engine makes the final range check against the market's own
+`outcomeCount`). No decimal rescaling — an index is a plain integer. An end-to-end
+test settles a real `CategoricalMarketEngine` market from a mock feed through it.
+
 ## Optimistic resolution (opt-in)
 
 Like the binary and scalar engines, settlement is optimistic when a nonzero
@@ -99,7 +110,9 @@ one, or an admin can deliberately void by arbitrating an out-of-range index.
   no-winner / invalid-sentinel voids, and the **opt-in optimistic dispute window**
   (propose → challenge → finalize → admin arbitration, bonded). 22 lifecycle + 10
   dispute tests.
-- **Oracle:** the `ICategoricalOracleAdapter` interface + `MockCategoricalOracle`.
+- **Oracle:** the `ICategoricalOracleAdapter` interface + `MockCategoricalOracle`,
+  and the production `CategoricalChainlinkAdapter` (15 tests, incl. an end-to-end
+  settle through the engine).
 - **Properties:** value conservation fuzzed across a two-winner book and across a
   variable outcome count with an arbitrary winner (2 fuzz tests, 512 runs each).
 - **Relayer:** `build_categorical_create_market_args` / `Relayer.run_categorical`
@@ -120,6 +133,5 @@ So categorical markets are now **created and settled by the workers** end to end
 on top of the contract engine and its dispute window.
 
 **Next (the rest of the vertical, as it was built out for scalar):**
-- a **Chainlink / categorical oracle adapter** for a real winning-index feed;
 - a **frontend** panel (per-outcome pools, implied probabilities, payout preview);
 - **devnet parity** against the real engine, like the binary and scalar engines.

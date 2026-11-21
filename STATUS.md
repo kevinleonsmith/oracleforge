@@ -3,7 +3,7 @@
 _Last updated: 2026-11-20_
 
 MVP of an autonomous AI prediction-market protocol on Gnosis Chain. **11 packages,
-357 passing tests** (incl. parimutuel settlement fuzzed for its invariants,
+372 passing tests** (incl. parimutuel settlement fuzzed for its invariants,
 stateful solvency proven across randomly-interleaved market histories, and a
 cross-package end-to-end that threads one market through every worker). Every
 off-chain worker, pure-logic layer, smart contract, and
@@ -33,7 +33,7 @@ Akash embeddings ─▶ Cartesi deterministic forecast ─▶ relayer createMark
 
 | Package | Purpose | Lang | Tests | Try it |
 |---------|---------|------|-------|--------|
-| `contracts` | MarketEngine (parimutuel), Treasury, ForgeToken, Chainlink oracle adapter; **fuzzed settlement + stateful solvency invariants**, **optimistic resolution with a bonded dispute window**, **two-step admin/governor rotation**, **every core contract directly reviewed + tested** (engine, Treasury, token, oracle adapter), **scalar (range) market engine** with proportional parimutuel settlement, its own dispute window + Chainlink oracle adapter, **categorical (N-outcome) market engine** with winner-take-all parimutuel settlement + fuzzed value conservation + its own optimistic dispute window | Solidity (Foundry) | **142** | `npm run test:contracts` |
+| `contracts` | MarketEngine (parimutuel), Treasury, ForgeToken, Chainlink oracle adapter; **fuzzed settlement + stateful solvency invariants**, **optimistic resolution with a bonded dispute window**, **two-step admin/governor rotation**, **every core contract directly reviewed + tested** (engine, Treasury, token, oracle adapter), **scalar (range) market engine** with proportional parimutuel settlement, its own dispute window + Chainlink oracle adapter, **categorical (N-outcome) market engine** with winner-take-all parimutuel settlement + fuzzed value conservation + its own optimistic dispute window + Chainlink oracle adapter | Solidity (Foundry) | **157** | `npm run test:contracts` |
 | `ai-market-generator` | signals → cluster → confidence → deterministic forecast → proposal | Python | **9** | `npm run ai` |
 | `cartesi` | deterministic forecast packaged as a Cartesi Rollups machine (commits notices) | Python + Docker | **9** | `npm run test:cartesi` |
 | `relayer` | Cartesi notices → `createMarket` on Gnosis (keccak + ABI encoding); **validated write path**, **creates binary, scalar and categorical markets** | Python | **46** | `npm run relay` |
@@ -44,7 +44,7 @@ Akash embeddings ─▶ Cartesi deterministic forecast ─▶ relayer createMark
 | `frontend` | Next.js terminal UI; live Tableland + viem reads, switchable with mock; **optimistic-resolution panel** (live challenge countdown, dispute/finalize); **scalar-market panel** (band, implied value, live LONG/SHORT payout) | TypeScript | **26** | `npm run dev` |
 | `shared` | Tableland SQL schema + shared TypeScript types | SQL + TS | — | — |
 | `integration` | end-to-end thread across every worker + contract-exact settlement (binary + scalar ports); **anvil devnet** parity vs the real `MarketEngine` **and `ScalarMarketEngine`** | Python + Foundry | **14** (+5 devnet) | `npm run e2e` · `npm run devnet` · `npm run devnet:scalar` |
-| | | | **357** | `npm test` |
+| | | | **372** | `npm test` |
 
 ## The determinism boundary (the key design decision)
 
@@ -149,8 +149,11 @@ A proof of this runs in CI: the relayer and inference tests assert the committed
   categorical oracle spec to `CategoricalMarketEngine.createMarket`, with the same
   marketId derivation (cross-consistent dedupe) and `CategoricalGnosisChain` as the
   live submitter — so categorical markets are created and settled by the workers end
-  to end. A Chainlink categorical adapter and a UI panel follow, as they did for the
-  scalar engine. Binary and scalar engines are untouched and independent.
+  to end. Settlement can read a real feed via `CategoricalChainlinkAdapter`, which
+  reports the winning index a Functions consumer posts (sharing the health posture,
+  but treating `0` as a valid index and an overflowing answer as the void sentinel);
+  an end-to-end test settles a real engine market through it. A UI panel follows, as
+  it did for the scalar engine. Binary and scalar engines are untouched and independent.
 - Every off-chain worker's logic end to end against stubs/local stores: market
   generation, deterministic forecasting, notice→createMarket mapping (incl. a
   from-scratch keccak256 verified against vectors), resolution planning, content-
@@ -193,7 +196,7 @@ every PR, as three jobs:
 
 | Check | What it does |
 |-------|--------------|
-| `all tests` | Node 22 + Python 3.11 + Foundry + PyYAML, runs `npm test` (all 357 tests) |
+| `all tests` | Node 22 + Python 3.11 + Foundry + PyYAML, runs `npm test` (all 372 tests) |
 | `frontend build` | `npm install` + `next build` in `packages/frontend` — compiles the TSX and type-checks the whole app (the one thing the stdlib test suite can't cover) |
 | `anvil devnet parity` | boots a real anvil node, deploys the actual contracts, and asserts on-chain payouts equal the Python ports — binary `MarketEngine` vs `settle()` and `ScalarMarketEngine` vs `scalar_settle()` (`npm run test:devnet`) |
 
