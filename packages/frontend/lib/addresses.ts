@@ -15,6 +15,7 @@ export interface Deployment {
     ScalarChainlinkAdapter: Hex;
     CategoricalMarketEngine: Hex;
     CategoricalChainlinkAdapter: Hex;
+    ForgeGovernor: Hex;
   };
   collateral: Hex;
   collateralDecimals: number;

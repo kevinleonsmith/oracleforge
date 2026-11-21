@@ -9,6 +9,8 @@ import {CategoricalMarketEngine} from "../src/CategoricalMarketEngine.sol";
 import {ChainlinkOracleAdapter} from "../src/oracle/ChainlinkOracleAdapter.sol";
 import {ScalarChainlinkAdapter} from "../src/oracle/ScalarChainlinkAdapter.sol";
 import {CategoricalChainlinkAdapter} from "../src/oracle/CategoricalChainlinkAdapter.sol";
+import {ForgeGovernor} from "../src/ForgeGovernor.sol";
+import {Treasury} from "../src/Treasury.sol";
 
 /// @notice Runs the real deployment script under `forge test` (the broadcast
 ///         cheatcode shims no-op outside `forge script`) and asserts the whole
@@ -27,7 +29,7 @@ contract DeployTest is MiniTest {
 
     /// Every contract in the book is a real, distinct deployment (nothing zero).
     function test_allContractsDeployed() public view {
-        address[9] memory addrs = [
+        address[10] memory addrs = [
             deploy.token(),
             deploy.treasury(),
             deploy.binaryOracle(),
@@ -36,6 +38,7 @@ contract DeployTest is MiniTest {
             deploy.scalarEngine(),
             deploy.categoricalOracle(),
             deploy.categoricalEngine(),
+            deploy.governor(),
             deploy.collateral()
         ];
         for (uint256 i; i < addrs.length; i++) {
@@ -87,5 +90,18 @@ contract DeployTest is MiniTest {
         assertTrue(deploy.binaryEngine() != deploy.scalarEngine(), "binary != scalar");
         assertTrue(deploy.scalarEngine() != deploy.categoricalEngine(), "scalar != cat");
         assertTrue(deploy.binaryEngine() != deploy.categoricalEngine(), "binary != cat");
+    }
+
+    /// The governor is deployed over the FORGE token, admin'd by the deployer, with
+    /// the configured voting parameters — ready to take control via a two-step
+    /// governance handover (not forced at deploy).
+    function test_governorDeployedOverForgeToken() public view {
+        ForgeGovernor g = ForgeGovernor(deploy.governor());
+        assertEq(address(g.token()), deploy.token(), "governor votes with FORGE");
+        assertEq(g.admin(), address(this), "governor admin is the deployer");
+        assertTrue(g.votingPeriod() > 0, "voting period set");
+        assertTrue(g.quorumVotes() > 0, "quorum set");
+        // control has NOT been force-handed to the governor at deploy
+        assertEq(Treasury(deploy.treasury()).governor(), address(this), "treasury still deployer-governed");
     }
 }

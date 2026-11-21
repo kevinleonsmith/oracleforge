@@ -9,6 +9,7 @@ import {ScalarChainlinkAdapter} from "../src/oracle/ScalarChainlinkAdapter.sol";
 import {ScalarMarketEngine} from "../src/ScalarMarketEngine.sol";
 import {CategoricalChainlinkAdapter} from "../src/oracle/CategoricalChainlinkAdapter.sol";
 import {CategoricalMarketEngine} from "../src/CategoricalMarketEngine.sol";
+import {ForgeGovernor} from "../src/ForgeGovernor.sol";
 
 /// @notice Deployment for Gnosis Chain / Chiado testnet. Brings up the shared
 ///         infrastructure (Treasury + ForgeToken) and all three market engines —
@@ -39,6 +40,12 @@ contract Deploy {
     address public scalarEngine;
     address public categoricalOracle;
     address public categoricalEngine;
+    address public governor;
+
+    // Governance parameters (FORGE-denominated). Tunable by the governor's admin.
+    uint64 constant VOTING_PERIOD = 3 days;
+    uint256 constant PROPOSAL_THRESHOLD = 100_000e18; // ~0.33% of the 30M genesis
+    uint256 constant QUORUM_VOTES = 1_000_000e18; // ~3.3% of genesis
 
     /// @return binaryEngine_ scalarEngine_ categoricalEngine_ the three engines,
     ///         sharing the Treasury and collateral recorded in the public vars.
@@ -74,6 +81,14 @@ contract Deploy {
         CategoricalMarketEngine ce = new CategoricalMarketEngine(col, address(co), address(t), gov);
         co.initEngine(address(ce));
 
+        // On-chain governance: FORGE-weighted. Deployed ready to take control; the
+        // handover is a deliberate two-step governance action, not forced at deploy:
+        // the current governor/admin calls transferGovernor / transferAdmin to
+        // nominate `g`, and a governance proposal that calls the matching accept*()
+        // ratifies it — so token holders, not the deployer, complete the transfer.
+        ForgeGovernor g = new ForgeGovernor(
+            address(f), VOTING_PERIOD, PROPOSAL_THRESHOLD, QUORUM_VOTES, gov);
+
         _stopBroadcast();
 
         // Record for the deployment test and the broadcast logs.
@@ -82,6 +97,7 @@ contract Deploy {
         collateral = col;
         binaryOracle = address(bo);
         binaryEngine = address(be);
+        governor = address(g);
         scalarOracle = address(so);
         scalarEngine = address(se);
         categoricalOracle = address(co);

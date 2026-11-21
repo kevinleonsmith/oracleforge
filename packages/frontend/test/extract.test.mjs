@@ -14,6 +14,7 @@ const BROADCAST = {
     { transactionType: "CREATE", contractName: "ScalarMarketEngine", contractAddress: "0xFFf0000000000000000000000000000000000006" },
     { transactionType: "CREATE", contractName: "CategoricalChainlinkAdapter", contractAddress: "0x1110000000000000000000000000000000000007" },
     { transactionType: "CREATE", contractName: "CategoricalMarketEngine", contractAddress: "0x2220000000000000000000000000000000000008" },
+    { transactionType: "CREATE", contractName: "ForgeGovernor", contractAddress: "0x3330000000000000000000000000000000000009" },
     { transactionType: "CALL", contractName: "ChainlinkOracleAdapter", contractAddress: "0xCCc0000000000000000000000000000000000003" },
   ],
 };
@@ -33,6 +34,11 @@ test("extracts the scalar + categorical engines and their adapters", () => {
   assert.equal(book.contracts.ScalarMarketEngine, "0xfff0000000000000000000000000000000000006");
   assert.equal(book.contracts.CategoricalChainlinkAdapter, "0x1110000000000000000000000000000000000007");
   assert.equal(book.contracts.CategoricalMarketEngine, "0x2220000000000000000000000000000000000008");
+});
+
+test("extracts the ForgeGovernor address", () => {
+  const book = extractAddresses(BROADCAST, { network: "chiado" });
+  assert.equal(book.contracts.ForgeGovernor, "0x3330000000000000000000000000000000000009");
 });
 
 test("missing contracts stay zero; CALLs ignored", () => {

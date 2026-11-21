@@ -17,6 +17,7 @@ const WANTED = [
   "ScalarChainlinkAdapter",
   "CategoricalMarketEngine",
   "CategoricalChainlinkAdapter",
+  "ForgeGovernor",
 ];
 
 /** Build a deployment book from a parsed Foundry broadcast object. */
