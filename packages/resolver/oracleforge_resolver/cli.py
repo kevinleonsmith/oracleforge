@@ -97,7 +97,9 @@ def main(argv=None) -> int:
 
     def _print_archive(sink) -> None:
         if isinstance(sink, TablelandReportSink) and sink.mutator.statements:
-            print("\narchive -> oracle_reports (would sign & send):")
+            # Each settlement emits an oracle_reports INSERT and a markets catalog
+            # transition (CLOSED on a propose, RESOLVED/INVALID on a finalize).
+            print("\nsettlement -> Tableland (oracle_reports + markets, would sign & send):")
             for stmt in sink.mutator.statements:
                 print(f"  {stmt}")
 

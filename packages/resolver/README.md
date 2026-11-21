@@ -66,7 +66,7 @@ each only differs in what it reads from the oracle and archives:
 python3 -m oracleforge_resolver.cli --dry-run
 python3 -m oracleforge_resolver.cli --dry-run --scalar   # the scalar-market variant
 python3 -m oracleforge_resolver.cli --dry-run --categorical # the categorical variant
-python3 -m oracleforge_resolver.cli --dry-run --tableland # also print the oracle_reports INSERTs
+python3 -m oracleforge_resolver.cli --dry-run --tableland # also print the Tableland SQL (oracle_reports INSERTs + markets catalog UPDATEs)
 
 # tests (stdlib only)
 python3 -m unittest discover -s tests -t .
