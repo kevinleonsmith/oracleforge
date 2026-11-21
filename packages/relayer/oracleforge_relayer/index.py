@@ -98,6 +98,50 @@ class MarketIndexRow:
         return f"INSERT INTO {table} ({', '.join(cols)}) VALUES ({', '.join(vals)});"
 
 
+DEFAULT_PREDICTIONS_TABLE = "predictions"
+DEFAULT_MODEL = "forge-forecast-mc"
+
+
+@dataclass
+class PredictionIndexRow:
+    """One ``predictions`` row built from a committed Cartesi forecast notice. Binary
+    markets carry an AI forecast (probability + a deterministic 95% confidence
+    interval + the Monte Carlo sample count), which the frontend's AI panel reads;
+    this is the index write for it, the prediction-side counterpart to the market
+    INSERT. Scalar/categorical markets carry no forecast, so they have no row."""
+
+    market_id: str
+    model: str
+    prob_yes_bps: int
+    ci_low_bps: int
+    ci_high_bps: int
+    samples: int
+    input_hash: str
+    computed_at: int
+
+    @classmethod
+    def from_notice(cls, market_id: str, notice: dict, computed_at: int,
+                    model: str = DEFAULT_MODEL) -> "PredictionIndexRow":
+        prob = int(notice["prob_bps"])
+        return cls(
+            market_id=market_id, model=model, prob_yes_bps=prob,
+            # the CI defaults to a point (prob) if an older notice lacks the bounds
+            ci_low_bps=int(notice.get("ci_low_bps", prob)),
+            ci_high_bps=int(notice.get("ci_high_bps", prob)),
+            samples=int(notice.get("samples", 0)),
+            input_hash=str(notice.get("input_hash", "")),
+            computed_at=int(computed_at),
+        )
+
+    def sql(self, table: str = DEFAULT_PREDICTIONS_TABLE) -> str:
+        cols = ["market_id", "model", "prob_yes_bps", "ci_low_bps", "ci_high_bps",
+                "samples", "input_hash", "computed_at"]
+        vals = [_q(self.market_id), _q(self.model), str(self.prob_yes_bps),
+                str(self.ci_low_bps), str(self.ci_high_bps), str(self.samples),
+                _q(self.input_hash), str(self.computed_at)]
+        return f"INSERT INTO {table} ({', '.join(cols)}) VALUES ({', '.join(vals)});"
+
+
 class MarketIndexSink(Protocol):
     def record(self, row: MarketIndexRow) -> None: ...
 
@@ -108,9 +152,12 @@ class LogMarketIndexSink:
     a signed registry sink (like the resolver's ``RegistryTablelandMutator``) is the
     live swap-in."""
 
-    def __init__(self, table: str = DEFAULT_MARKETS_TABLE):
+    def __init__(self, table: str = DEFAULT_MARKETS_TABLE,
+                 predictions_table: str = DEFAULT_PREDICTIONS_TABLE):
         self.table = table
+        self.predictions_table = predictions_table
         self.rows: List[MarketIndexRow] = []
+        self.predictions: List[PredictionIndexRow] = []
         self.statements: List[str] = []
 
     def record(self, row: MarketIndexRow) -> None:
@@ -118,3 +165,9 @@ class LogMarketIndexSink:
         stmt = row.sql(self.table)
         self.statements.append(stmt)
         logger.info("markets index <- %s", stmt)
+
+    def record_prediction(self, row: PredictionIndexRow) -> None:
+        self.predictions.append(row)
+        stmt = row.sql(self.predictions_table)
+        self.statements.append(stmt)
+        logger.info("predictions index <- %s", stmt)

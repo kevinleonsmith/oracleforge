@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 
 from .chain import Chain
 from .feeds import FeedRegistry
-from .index import LogMarketIndexSink, MarketIndexRow, MarketIndexSink
+from .index import LogMarketIndexSink, MarketIndexRow, MarketIndexSink, PredictionIndexRow
 from .mapping import (
     SkipProposal,
     build_categorical_create_market_args,
@@ -114,8 +114,13 @@ class Relayer:
         except Exception as e:  # noqa: BLE001
             return RelayResult(q, args.market_id, "error", f"{type(e).__name__}: {e}",
                                ai_prob_bps=args.ai_prob_bps)
+        now = self._now()
         self.index_sink.record(MarketIndexRow.from_binary(
-            args, category=proposal.get("category", ""), created_at=self._now()))
+            args, category=proposal.get("category", ""), created_at=now))
+        # A binary market carries an AI forecast; index it as a predictions row too.
+        record_prediction = getattr(self.index_sink, "record_prediction", None)
+        if record_prediction is not None:
+            record_prediction(PredictionIndexRow.from_notice(args.market_id, notice, now))
         return RelayResult(q, args.market_id, "submitted", "", tx_hash=tx,
                            ai_prob_bps=args.ai_prob_bps)
 

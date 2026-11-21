@@ -56,6 +56,24 @@ class ForecastTests(unittest.TestCase):
         self.assertEqual(a.prob_yes, b.prob_yes)  # reproducible across runs
         self.assertTrue(0 <= a.prob_bps <= 10000)
 
+    def test_confidence_interval_is_deterministic_and_brackets_the_estimate(self):
+        a = monte_carlo_forecast("Will X happen?", [0.4], samples=20000)
+        b = monte_carlo_forecast("Will X happen?", [0.4], samples=20000)
+        # reproducible bounds (same inputs -> byte-identical CI, like the estimate)
+        self.assertEqual((a.ci_low_bps, a.ci_high_bps), (b.ci_low_bps, b.ci_high_bps))
+        # the interval brackets the point estimate and stays in range
+        self.assertLessEqual(a.ci_low_bps, a.prob_bps)
+        self.assertGreaterEqual(a.ci_high_bps, a.prob_bps)
+        self.assertTrue(0 <= a.ci_low_bps <= a.ci_high_bps <= 10000)
+
+    def test_confidence_interval_narrows_with_more_samples(self):
+        narrow = monte_carlo_forecast("q", [0.3], samples=100000)
+        wide = monte_carlo_forecast("q", [0.3], samples=2000)
+        self.assertLess(
+            narrow.ci_high_bps - narrow.ci_low_bps,
+            wide.ci_high_bps - wide.ci_low_bps,
+        )
+
     def test_positive_prior_leans_yes(self):
         pos = monte_carlo_forecast("q", [0.8], samples=20000).prob_yes
         neg = monte_carlo_forecast("q", [-0.8], samples=20000).prob_yes

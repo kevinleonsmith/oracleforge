@@ -24,10 +24,30 @@ class ForecastResult:
     samples: int
     seed: int
     input_hash: str  # sha256 of the canonical input -> ties result to inputs
+    ci_low: float = 0.0   # 95% interval lower bound (0..1)
+    ci_high: float = 0.0  # 95% interval upper bound (0..1)
 
     @property
     def prob_bps(self) -> int:
         return max(0, min(10_000, round(self.prob_yes * 10_000)))
+
+    @property
+    def ci_low_bps(self) -> int:
+        return max(0, min(10_000, round(self.ci_low * 10_000)))
+
+    @property
+    def ci_high_bps(self) -> int:
+        return max(0, min(10_000, round(self.ci_high * 10_000)))
+
+
+def _wald_ci(prob: float, samples: int, z: float = 1.96) -> tuple:
+    """95% normal-approximation (Wald) interval on a sample proportion. Derived
+    purely from `prob` and `samples` (no new randomness), so every node and every
+    fraud-proof replay computes identical bounds. Clamped to [0, 1]."""
+    if samples <= 0:
+        return (prob, prob)
+    half = z * math.sqrt(prob * (1.0 - prob) / samples)
+    return (max(0.0, round(prob - half, 4)), min(1.0, round(prob + half, 4)))
 
 
 def _seed_from_inputs(question: str, priors: List[float]) -> int:
@@ -59,10 +79,14 @@ def monte_carlo_forecast(
         if _sigmoid(draw) >= 0.5:
             hits += 1
     prob = hits / samples
+    ci_low, ci_high = _wald_ci(prob, samples)
     input_hash = "0x" + hashlib.sha256(
         (question + "|" + ",".join(map(str, priors))).encode()
     ).hexdigest()
-    return ForecastResult(prob_yes=round(prob, 4), samples=samples, seed=seed, input_hash=input_hash)
+    return ForecastResult(
+        prob_yes=round(prob, 4), samples=samples, seed=seed, input_hash=input_hash,
+        ci_low=ci_low, ci_high=ci_high,
+    )
 
 
 def bayesian_update(prior_prob: float, likelihood_ratio: float) -> float:

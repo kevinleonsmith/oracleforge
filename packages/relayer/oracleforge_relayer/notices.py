@@ -48,6 +48,8 @@ class StubNoticeSource:
             "question": request["question"],
             "prob_yes": r.prob_yes,
             "prob_bps": r.prob_bps,
+            "ci_low_bps": r.ci_low_bps,
+            "ci_high_bps": r.ci_high_bps,
             "samples": r.samples,
             "seed": r.seed,
             "input_hash": r.input_hash,

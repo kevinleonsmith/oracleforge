@@ -30,10 +30,13 @@ For each AI market proposal the relayer:
 - **`index.py`** — for each freshly-created market, builds a self-describing
   `markets` index row: `market_type` (binary/scalar/categorical) plus a JSON
   `params` blob for the parameters with no dedicated column (the scalar band + unit,
-  the categorical outcome labels). Pure escaped SQL through a sink seam
-  (`LogMarketIndexSink` dry-run · a signed registry sink is the live swap-in), the
-  creation-time counterpart to the resolver's `oracle_reports` write-back. The
-  `markets` catalog is thus populated for all three market types, not just binary.
+  the categorical outcome labels). A binary market additionally gets a `predictions`
+  row (`PredictionIndexRow`): the committed probability, the forecast's reproducible
+  95% confidence interval and the Monte Carlo sample count — the AI panel's data.
+  Pure escaped SQL through a sink seam (`LogMarketIndexSink` dry-run · a signed
+  registry sink is the live swap-in), the creation-time counterpart to the resolver's
+  `oracle_reports` write-back. The `markets` catalog is thus populated for all three
+  market types, not just binary.
 
 ## Run
 

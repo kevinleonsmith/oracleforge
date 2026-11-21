@@ -12,6 +12,7 @@ from oracleforge_relayer.feeds import FeedRegistry  # noqa: E402
 from oracleforge_relayer.index import (  # noqa: E402
     LogMarketIndexSink,
     MarketIndexRow,
+    PredictionIndexRow,
 )
 from oracleforge_relayer.mapping import (  # noqa: E402
     build_categorical_create_market_args,
@@ -107,6 +108,34 @@ class MarketIndexRowTests(unittest.TestCase):
         self.assertIn("INSERT INTO markets", sink.statements[0])
 
 
+class PredictionIndexRowTests(unittest.TestCase):
+    def test_from_notice_carries_prob_ci_samples(self):
+        notice = {"prob_bps": 6700, "ci_low_bps": 6100, "ci_high_bps": 7300,
+                  "samples": 50000, "input_hash": "0xabc"}
+        row = PredictionIndexRow.from_notice("0xMKT", notice, NOW)
+        self.assertEqual(row.prob_yes_bps, 6700)
+        self.assertEqual((row.ci_low_bps, row.ci_high_bps), (6100, 7300))
+        self.assertEqual(row.samples, 50000)
+        self.assertEqual(row.input_hash, "0xabc")
+        self.assertEqual(row.computed_at, NOW)
+        sql = row.sql()
+        self.assertTrue(sql.startswith("INSERT INTO predictions ("))
+        self.assertIn("market_id, model, prob_yes_bps, ci_low_bps, ci_high_bps, samples, input_hash, computed_at", sql)
+        self.assertIn("6700", sql)
+
+    def test_missing_ci_defaults_to_point_estimate(self):
+        # an older notice without CI bounds collapses the interval to the estimate
+        row = PredictionIndexRow.from_notice("0x1", {"prob_bps": 5000}, NOW)
+        self.assertEqual((row.ci_low_bps, row.ci_high_bps), (5000, 5000))
+        self.assertEqual(row.samples, 0)
+
+    def test_log_sink_record_prediction_collects(self):
+        sink = LogMarketIndexSink()
+        sink.record_prediction(PredictionIndexRow.from_notice("0x1", {"prob_bps": 5000}, NOW))
+        self.assertEqual(len(sink.predictions), 1)
+        self.assertIn("INSERT INTO predictions", sink.statements[0])
+
+
 class RelayerIndexingTests(unittest.TestCase):
     """The relayer records a markets-index row for each freshly-created market."""
 
@@ -122,6 +151,27 @@ class RelayerIndexingTests(unittest.TestCase):
         self.assertEqual(len(sink.rows), 1)
         self.assertEqual(sink.rows[0].market_type, "binary")
         self.assertEqual(sink.rows[0].market_id, res.market_id)
+
+    def test_binary_submit_also_records_a_prediction(self):
+        relayer, sink = self._relayer()
+        res = relayer.relay_one(BINARY_PROPOSAL)
+        self.assertEqual(len(sink.predictions), 1)
+        p = sink.predictions[0]
+        self.assertEqual(p.market_id, res.market_id)
+        self.assertEqual(p.prob_yes_bps, res.ai_prob_bps)      # committed forecast
+        self.assertLessEqual(p.ci_low_bps, p.prob_yes_bps)     # a real CI from the forecast
+        self.assertGreaterEqual(p.ci_high_bps, p.prob_yes_bps)
+        self.assertGreater(p.samples, 0)
+
+    def test_scalar_submit_records_no_prediction(self):
+        relayer, sink = self._relayer()
+        relayer.relay_scalar_one(SCALAR_PROPOSAL)
+        self.assertEqual(len(sink.predictions), 0)  # scalar carries no forecast
+
+    def test_categorical_submit_records_no_prediction(self):
+        relayer, sink = self._relayer()
+        relayer.relay_categorical_one(CATEGORICAL_PROPOSAL)
+        self.assertEqual(len(sink.predictions), 0)
 
     def test_scalar_submit_records_index_row(self):
         relayer, sink = self._relayer()

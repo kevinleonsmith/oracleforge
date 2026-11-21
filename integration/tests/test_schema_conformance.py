@@ -26,7 +26,7 @@ SCHEMA_PATH = os.path.join(_ROOT, "packages", "shared", "tableland", "schema.sql
 
 from oracleforge_archiver.tableland import WriteBack  # noqa: E402
 from oracleforge_relayer.feeds import FeedRegistry  # noqa: E402
-from oracleforge_relayer.index import MarketIndexRow  # noqa: E402
+from oracleforge_relayer.index import MarketIndexRow, PredictionIndexRow  # noqa: E402
 from oracleforge_relayer.mapping import (  # noqa: E402
     build_categorical_create_market_args,
     build_create_market_args,
@@ -169,6 +169,23 @@ class OracleReportsConforms(unittest.TestCase):
         self.con.row_factory = sqlite3.Row
         row = self.con.execute("SELECT market_type, outcome FROM oracle_reports WHERE market_id='0xc'").fetchone()
         self.assertEqual((row["market_type"], row["outcome"]), ("categorical", 0))
+
+
+class PredictionsConforms(unittest.TestCase):
+    def setUp(self):
+        self.con = _db()
+
+    def test_prediction_row_inserts_against_schema(self):
+        notice = {"prob_bps": 6700, "ci_low_bps": 6100, "ci_high_bps": 7300,
+                  "samples": 50000, "input_hash": "0xdef"}
+        row = PredictionIndexRow.from_notice("0xMKT", notice, NOW)
+        self.con.execute(row.sql("predictions"))
+        self.con.row_factory = sqlite3.Row
+        r = self.con.execute("SELECT * FROM predictions WHERE market_id='0xMKT'").fetchone()
+        self.assertEqual(r["prob_yes_bps"], 6700)
+        self.assertEqual((r["ci_low_bps"], r["ci_high_bps"]), (6100, 7300))
+        self.assertEqual(r["samples"], 50000)
+        self.assertEqual(r["model"], "forge-forecast-mc")
 
 
 if __name__ == "__main__":

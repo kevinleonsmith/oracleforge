@@ -3,7 +3,7 @@
 _Last updated: 2026-11-20_
 
 MVP of an autonomous AI prediction-market protocol on Gnosis Chain. **11 packages,
-457 passing tests** (incl. parimutuel settlement fuzzed for its invariants,
+466 passing tests** (incl. parimutuel settlement fuzzed for its invariants,
 stateful solvency proven across randomly-interleaved market histories, and a
 cross-package end-to-end that threads one market through every worker). Every
 off-chain worker, pure-logic layer, smart contract, and
@@ -34,17 +34,17 @@ Akash embeddings ─▶ Cartesi deterministic forecast ─▶ relayer createMark
 | Package | Purpose | Lang | Tests | Try it |
 |---------|---------|------|-------|--------|
 | `contracts` | MarketEngine (parimutuel), Treasury, ForgeToken, Chainlink oracle adapter; **fuzzed settlement + stateful solvency invariants**, **optimistic resolution with a bonded dispute window**, **two-step admin/governor rotation**, **every core contract directly reviewed + tested** (engine, Treasury, token, oracle adapter), **scalar (range) market engine** with proportional parimutuel settlement + **stateful solvency invariants** (clamped either way, mid-band split, one-sided void) + its own dispute window + Chainlink oracle adapter, **categorical (N-outcome) market engine** with winner-take-all parimutuel settlement + fuzzed value conservation + **stateful solvency invariants** (across interleaved N-outcome histories incl. every void path) + its own optimistic dispute window + Chainlink oracle adapter; **all three engines carry stateful solvency invariants**, plus **dispute/bond stateful invariants on all three engines** (full propose/dispute/arbitrate/finalize lifecycle with the global bond churning under open challenges — proves bonds are conserved; hardened the binary engine to snapshot the posted bond, finding F8), plus a **cross-engine shared-Treasury invariant** (all three engines skimming into one Treasury — the production deploy topology — stays solvent and the fees aggregate exactly); **focused review of the scalar/categorical adapters** (finding O5: the scalar adapter now fails safe on a feed with pathological decimals instead of reverting/corrupting `_rescale`) | Solidity (Foundry) | **184** | `npm run test:contracts` |
-| `ai-market-generator` | signals → cluster → confidence → deterministic forecast → proposal | Python | **9** | `npm run ai` |
+| `ai-market-generator` | signals → cluster → confidence → deterministic forecast (with a reproducible 95% confidence interval) → proposal | Python | **11** | `npm run ai` |
 | `cartesi` | deterministic forecast packaged as a Cartesi Rollups machine (commits notices) | Python + Docker | **9** | `npm run test:cartesi` |
-| `relayer` | Cartesi notices → `createMarket` on Gnosis (keccak + ABI encoding); **validated write path**, **creates binary, scalar and categorical markets**; **writes a self-describing `markets` index row per created market** (`market_type` + JSON `params` for the scalar band + categorical labels + feed, pure escaped SQL through a sink seam — read back by the frontend) | Python | **57** | `npm run relay` |
+| `relayer` | Cartesi notices → `createMarket` on Gnosis (keccak + ABI encoding); **validated write path**, **creates binary, scalar and categorical markets**; **writes a self-describing `markets` index row per created market** (`market_type` + JSON `params` for the scalar band + categorical labels + feed, pure escaped SQL through a sink seam — read back by the frontend), **plus a `predictions` row for each binary market** (committed probability + the forecast's reproducible 95% CI + Monte Carlo sample count) | Python | **63** | `npm run relay` |
 | `resolver` | resolution watcher — proposes `resolve()`, waits out the dispute window, `finalize()`s, archives outcomes; **drives binary, scalar and categorical engines** (`Watcher` / `ScalarWatcher` / `CategoricalWatcher`); **`oracle_reports` write-back** (built, escaped SQL through a signed-mutation seam; now carries a self-describing `market_type` column so a settlement's `outcome` is unambiguous across binary/scalar/categorical); **the full `markets` catalog lifecycle is written** — a propose (under a challenge window) transitions `OPEN → CLOSED` and stamps `proposed_at`, and settlement transitions `CLOSED → RESOLVED/INVALID`, so the index tracks a market through its dispute window instead of showing it open until it vanishes | Python | **79** | `npm run resolve` |
 | `archiver` | Arweave permanent storage + Tableland `arweave_tx` write-back | Python | **13** | `npm run archive` |
 | `inference` | Akash GPU service (embeddings + drafting) + SDL; `RemoteEmbedder` | Python + Docker | **18** | `npm run inference` |
 | `lit` | token-gated / encrypted private markets (Lit Protocol) | TypeScript | **14** | `npm run lit` |
 | `frontend` | Next.js terminal UI; live Tableland + viem reads, switchable with mock; **optimistic-resolution panel** (live challenge countdown, dispute/finalize); **scalar-market panel** (band, implied value, live LONG/SHORT payout); **categorical-market panel** (per-outcome implied probabilities, winner-take-all payout preview); **all three market types flow through the mock/chain facade** — scalar + categorical read from the Tableland `markets` index (`market_type` + JSON `params` parsed into the card defs), pools hydrated live from their engines, pure SQL builders + row mappers unit-tested; **protocol stats (TVL + active-market count) aggregate across all three market types** | TypeScript | **46** | `npm run dev` |
 | `shared` | Tableland SQL schema + shared TypeScript types | SQL + TS | — | — |
-| `integration` | end-to-end thread across every worker + contract-exact settlement (binary + scalar + categorical ports); **cross-engine thread** (one question → all three engines, proving identical marketId derivation / dedupe + per-type settlement + self-describing index rows); **schema-conformance** (the real SQL the relayer/resolver/archiver emit is executed and round-tripped against `schema.sql` in in-memory SQLite — the full `markets` lifecycle + `oracle_reports`, catching column/type drift the string tests miss); **anvil devnet** parity vs the real `MarketEngine`, `ScalarMarketEngine` **and `CategoricalMarketEngine`** | Python + Foundry | **28** (+8 devnet) | `npm run e2e` · `npm run devnet*` |
-| | | | **457** | `npm test` |
+| `integration` | end-to-end thread across every worker + contract-exact settlement (binary + scalar + categorical ports); **cross-engine thread** (one question → all three engines, proving identical marketId derivation / dedupe + per-type settlement + self-describing index rows); **schema-conformance** (the real SQL the relayer/resolver/archiver emit is executed and round-tripped against `schema.sql` in in-memory SQLite — the full `markets` lifecycle + `oracle_reports` + `predictions`, catching column/type drift the string tests miss); **anvil devnet** parity vs the real `MarketEngine`, `ScalarMarketEngine` **and `CategoricalMarketEngine`** | Python + Foundry | **29** (+8 devnet) | `npm run e2e` · `npm run devnet*` |
+| | | | **466** | `npm test` |
 
 ## The determinism boundary (the key design decision)
 
@@ -222,7 +222,7 @@ every PR, as three jobs:
 
 | Check | What it does |
 |-------|--------------|
-| `all tests` | Node 22 + Python 3.11 + Foundry + PyYAML, runs `npm test` (all 457 tests) |
+| `all tests` | Node 22 + Python 3.11 + Foundry + PyYAML, runs `npm test` (all 466 tests) |
 | `frontend build` | `npm install` + `next build` in `packages/frontend` — compiles the TSX and type-checks the whole app (the one thing the stdlib test suite can't cover) |
 | `anvil devnet parity` | boots a real anvil node, deploys the actual contracts, and asserts on-chain payouts equal the Python ports — binary `MarketEngine` vs `settle()`, `ScalarMarketEngine` vs `scalar_settle()`, and `CategoricalMarketEngine` vs `categorical_settle()` (`npm run test:devnet`) |
 
