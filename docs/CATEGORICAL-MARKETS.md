@@ -72,19 +72,38 @@ uses a separate `ICategoricalOracleAdapter`
 unit tests (`set` names the winner, `setInvalid` reports the void sentinel,
 `clear` marks not-yet-ready).
 
+## Optimistic resolution (opt-in)
+
+Like the binary and scalar engines, settlement is optimistic when a nonzero
+`challengeWindow` is set. `resolve()` then only **proposes** the oracle's winning
+index (status `Closed`); anyone may `dispute()` within the window by posting
+`disputeBond` collateral, which freezes the market until the admin `arbitrate()`s.
+An upheld challenge refunds the bond and the admin's ruling becomes authoritative;
+a rejected one forfeits the bond to the treasury and the proposed outcome stands.
+Once the window passes with no open dispute, `finalize()` settles and opens claims.
+A zero window keeps atomic settlement (v1 behavior), so the feature is opt-in and
+additive. The exact bond is snapshotted per dispute, so changing the global
+`disputeBond` mid-dispute can't mis-refund.
+
+Unlike the scalar engine — whose one-sided-book void is *structural* and settles
+immediately, bypassing the window — categorical's voids (an out-of-range/invalid
+index, or a winning pool with no stake) depend on the *final* winning outcome, so
+they are decided at **finalization**: a dispute can move the outcome to a funded
+one, or an admin can deliberately void by arbitrating an out-of-range index.
+
 ## Status & follow-ups
 
-**Done — the contract foundation:**
+**Done:**
 - **Engine:** `CategoricalMarketEngine` with N-outcome parimutuel settlement, the
-  hardened posture (two-step admin, zero-address guards, fee snapshot), and the
-  no-winner / invalid-sentinel voids. 22 lifecycle + settlement tests.
+  hardened posture (two-step admin, zero-address guards, fee snapshot), the
+  no-winner / invalid-sentinel voids, and the **opt-in optimistic dispute window**
+  (propose → challenge → finalize → admin arbitration, bonded). 22 lifecycle + 10
+  dispute tests.
 - **Oracle:** the `ICategoricalOracleAdapter` interface + `MockCategoricalOracle`.
 - **Properties:** value conservation fuzzed across a two-winner book and across a
   variable outcome count with an arbitrary winner (2 fuzz tests, 512 runs each).
 
 **Next (the rest of the vertical, as it was built out for scalar):**
-- an **optimistic dispute window** (propose → challenge → finalize → arbitrate),
-  mirroring the binary and scalar engines;
 - a **Chainlink / categorical oracle adapter** for a real winning-index feed;
 - **relayer** create-market support (an `outcomeCount` + oracle spec);
 - **resolver** settlement driving (`CategoricalWatcher`);

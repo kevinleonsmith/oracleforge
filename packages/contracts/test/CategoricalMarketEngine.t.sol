@@ -161,7 +161,7 @@ contract CategoricalMarketEngineTest is MiniTest {
         _resolve(id, 0);
 
         CategoricalMarketEngine.Market memory m = engine.getMarket(id);
-        assertEq(uint256(uint8(m.status)), 1, "resolved");
+        assertEq(uint256(uint8(m.status)), 2, "resolved");
         assertEq(uint256(m.winningOutcome), 0, "winner 0");
         assertEq(collateral.balanceOf(address(treasury)), 20, "fee 2% of losing pool");
 
@@ -213,7 +213,7 @@ contract CategoricalMarketEngineTest is MiniTest {
         _resolve(id, 2); // outcome 2 has no stake
 
         CategoricalMarketEngine.Market memory m = engine.getMarket(id);
-        assertEq(uint256(uint8(m.status)), 2, "invalid");
+        assertEq(uint256(uint8(m.status)), 3, "invalid");
         assertEq(collateral.balanceOf(address(treasury)), 0, "no fee on void");
         assertEq(_claim(id, alice), 600, "alice refunded principal");
         assertEq(_claim(id, carol), 500, "carol refunded principal");
@@ -229,7 +229,7 @@ contract CategoricalMarketEngineTest is MiniTest {
         engine.resolve(id);
 
         CategoricalMarketEngine.Market memory m = engine.getMarket(id);
-        assertEq(uint256(uint8(m.status)), 2, "invalid");
+        assertEq(uint256(uint8(m.status)), 3, "invalid");
         assertEq(_claim(id, alice), 600, "alice refunded");
     }
 

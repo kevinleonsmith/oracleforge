@@ -21,14 +21,16 @@ import {IERC20} from "./interfaces/IERC20.sol";
 ///         market is exactly the N=2 case (Yes/No). Winner-take-all, unlike the
 ///         scalar engine's continuum.
 /// @dev MVP scaffold, not audited. Same hardened posture as MarketEngine
-///      (two-step admin, zero-address guards, fee snapshotted at creation, and a
-///      no-winner void that refunds every principal). The optimistic dispute
-///      window is a later addition, as it was for the scalar engine.
+///      (two-step admin, zero-address guards, fee snapshotted at creation, a
+///      no-winner void that refunds every principal, and an opt-in optimistic
+///      dispute window: propose -> challenge -> finalize, with a bonded dispute
+///      and admin arbitration; a zero challengeWindow keeps atomic settlement).
 contract CategoricalMarketEngine {
     enum Status {
         Open, // 0
-        Resolved, // 1
-        Invalid // 2 — voided; principals refunded
+        Closed, // 1 — winning outcome proposed, awaiting finalization (dispute window)
+        Resolved, // 2
+        Invalid // 3 — voided; principals refunded
     }
 
     struct Market {
@@ -66,13 +68,31 @@ contract CategoricalMarketEngine {
     mapping(bytes32 => mapping(address => mapping(uint8 => uint256))) public stakeOf;
     mapping(bytes32 => mapping(address => bool)) public claimed;
 
+    // --- optimistic resolution + dispute window ---
+    /// @notice Seconds a proposed winning outcome can be challenged before it
+    ///         finalizes. 0 (the default) means resolve() finalizes immediately,
+    ///         so the window is strictly opt-in and v1 behavior is preserved.
+    uint64 public challengeWindow;
+    /// @notice Collateral a challenger must bond to dispute. 0 disables disputes.
+    uint256 public disputeBond;
+
+    mapping(bytes32 => uint8) public proposedOutcome; // winning index proposed at resolve()
+    mapping(bytes32 => uint64) public proposedAt; // timestamp the outcome was proposed
+    mapping(bytes32 => address) public challengerOf; // nonzero while under dispute
+    mapping(bytes32 => uint256) public bondOf; // exact bond posted for an open dispute
+
     event MarketCreated(bytes32 indexed marketId, bytes32 questionHash, uint64 closeAt, uint8 outcomeCount);
     event PositionTaken(bytes32 indexed marketId, address indexed account, uint8 outcome, uint256 amount);
+    event ResolutionProposed(bytes32 indexed marketId, uint8 outcome, uint64 at);
     event MarketResolved(bytes32 indexed marketId, uint8 winningOutcome, uint256 fee);
     event MarketVoided(bytes32 indexed marketId);
     event Claimed(bytes32 indexed marketId, address indexed account, uint256 payout);
     event RelayerUpdated(address indexed relayer, bool allowed);
     event FeeUpdated(uint16 feeBps);
+    event ChallengeWindowUpdated(uint64 window);
+    event DisputeBondUpdated(uint256 bond);
+    event Disputed(bytes32 indexed marketId, address indexed challenger, uint256 bond);
+    event DisputeResolved(bytes32 indexed marketId, address indexed challenger, bool upheld);
     event AdminTransferStarted(address indexed currentAdmin, address indexed pendingAdmin);
     event AdminTransferred(address indexed previousAdmin, address indexed newAdmin);
 
@@ -124,6 +144,16 @@ contract CategoricalMarketEngine {
         emit FeeUpdated(_feeBps);
     }
 
+    function setChallengeWindow(uint64 _window) external onlyAdmin {
+        challengeWindow = _window;
+        emit ChallengeWindowUpdated(_window);
+    }
+
+    function setDisputeBond(uint256 _bond) external onlyAdmin {
+        disputeBond = _bond;
+        emit DisputeBondUpdated(_bond);
+    }
+
     // ------------------------------------------------------------------- markets
 
     function createMarket(
@@ -170,9 +200,13 @@ contract CategoricalMarketEngine {
         emit PositionTaken(marketId, msg.sender, outcome, amount);
     }
 
-    /// @notice Permissionless: read the oracle and settle a closed market. An
-    ///         out-of-range outcome (the invalid sentinel) or a winning pool with
-    ///         no stake voids the market (every principal refundable).
+    /// @notice Permissionless: read the oracle and *propose* a winning outcome for
+    ///         a closed market. With a nonzero challengeWindow the proposal must
+    ///         survive the window (or an admin arbitration of a dispute) before
+    ///         finalize() settles; with a zero window it settles atomically. The
+    ///         void decisions (out-of-range/invalid index, or a winning pool with
+    ///         no stake) depend on the *final* outcome, so they are made at
+    ///         finalization — a dispute could change the outcome to a funded one.
     function resolve(bytes32 marketId) external {
         Market storage m = _markets[marketId];
         require(m.createdAt != 0, "CAT: no market");
@@ -181,6 +215,69 @@ contract CategoricalMarketEngine {
 
         (bool ready, uint8 outcome) = oracle.latestOutcome(marketId);
         require(ready, "CAT: oracle pending");
+
+        proposedOutcome[marketId] = outcome;
+        proposedAt[marketId] = uint64(block.timestamp);
+        m.status = Status.Closed; // "proposed, awaiting finalization"
+        emit ResolutionProposed(marketId, outcome, uint64(block.timestamp));
+
+        // Fast path: no window => settle atomically (Open -> Resolved/Invalid).
+        if (challengeWindow == 0) _finalize(marketId);
+    }
+
+    /// @notice Lock in a proposed outcome once its challenge window has elapsed and
+    ///         no dispute is open. Permissionless, like resolve().
+    function finalize(bytes32 marketId) external {
+        require(_markets[marketId].status == Status.Closed, "CAT: not proposed");
+        require(challengerOf[marketId] == address(0), "CAT: disputed");
+        require(block.timestamp >= proposedAt[marketId] + challengeWindow, "CAT: window open");
+        _finalize(marketId);
+    }
+
+    /// @notice Challenge a proposed outcome within its window by posting a bond.
+    ///         Freezes finalization until the admin arbitrates. A rejected
+    ///         challenge forfeits the bond to the treasury; an upheld one refunds it.
+    function dispute(bytes32 marketId) external {
+        require(_markets[marketId].status == Status.Closed, "CAT: not proposed");
+        require(challengerOf[marketId] == address(0), "CAT: already disputed");
+        require(disputeBond > 0, "CAT: disputes off");
+        require(block.timestamp < proposedAt[marketId] + challengeWindow, "CAT: window closed");
+        require(collateral.transferFrom(msg.sender, address(this), disputeBond), "CAT: bond");
+        challengerOf[marketId] = msg.sender;
+        bondOf[marketId] = disputeBond; // snapshot the exact amount posted
+        emit Disputed(marketId, msg.sender, disputeBond);
+    }
+
+    /// @notice Admin (arbiter of last resort) resolves a dispute with the
+    ///         authoritative winning outcome and settles the challenger's bond.
+    /// @param upheld true if the challenge was correct (bond refunded), false if
+    ///        rejected (bond forfeited to the treasury).
+    function arbitrate(bytes32 marketId, uint8 finalOutcome, bool upheld) external onlyAdmin {
+        address challenger = challengerOf[marketId];
+        require(challenger != address(0), "CAT: no dispute");
+
+        challengerOf[marketId] = address(0);
+        uint256 bond = bondOf[marketId];
+        bondOf[marketId] = 0;
+        proposedOutcome[marketId] = finalOutcome; // admin's ruling is authoritative
+
+        if (upheld) {
+            require(collateral.transfer(challenger, bond), "CAT: refund bond");
+        } else {
+            collateral.approve(address(treasury), bond);
+            treasury.collectFee(address(collateral), bond);
+        }
+        emit DisputeResolved(marketId, challenger, upheld);
+        _finalize(marketId);
+    }
+
+    /// @dev Apply the (finalized) proposed outcome: an out-of-range/invalid index
+    ///      or a winning pool with no stake voids the market (every principal
+    ///      refundable); otherwise mark Resolved and skim the snapshotted fee from
+    ///      the losing pool.
+    function _finalize(bytes32 marketId) internal {
+        Market storage m = _markets[marketId];
+        uint8 outcome = proposedOutcome[marketId];
 
         // Out-of-range outcome (incl. the invalid sentinel) -> void & refund.
         if (outcome >= m.outcomeCount) {
