@@ -5,8 +5,12 @@ import assert from "node:assert/strict";
 import {
   sqlOpenMarkets,
   sqlActiveProposals,
+  sqlScalarMarkets,
+  sqlCategoricalMarkets,
   mapMarketRow,
   mapProposalRow,
+  mapScalarMarketRow,
+  mapCategoricalMarketRow,
   computeStats,
 } from "../lib/queries.ts";
 import { bpsToPercent, formatUnits, formatCompact, impliedYesPercent, payoutPreview } from "../lib/format.ts";
@@ -16,6 +20,58 @@ test("sqlOpenMarkets filters open/closed and orders by close", () => {
   assert.match(q, /FROM markets_10200_7/);
   assert.match(q, /status IN \('OPEN','CLOSED'\)/);
   assert.match(q, /ORDER BY close_at ASC LIMIT 25/);
+});
+
+test("sqlScalarMarkets / sqlCategoricalMarkets filter by market_type", () => {
+  const sc = sqlScalarMarkets("markets_10200_7", 10);
+  assert.match(sc, /FROM markets_10200_7/);
+  assert.match(sc, /market_type='scalar'/);
+  assert.match(sc, /status IN \('OPEN','CLOSED'\)/);
+  assert.match(sc, /LIMIT 10/);
+  assert.match(sc, /params/); // selects the type-specific params blob
+
+  const cat = sqlCategoricalMarkets("markets_10200_7");
+  assert.match(cat, /market_type='categorical'/);
+});
+
+test("mapScalarMarketRow parses the band/unit/feed from params", () => {
+  const def = mapScalarMarketRow({
+    market_id: "0xMKT", question: "ETH close?", category: "CRYPTO",
+    market_type: "scalar",
+    params: JSON.stringify({ feed: "ETH/USD", lower: 3000, upper: 5000, unit: "$" }),
+  });
+  assert.equal(def.id, "0xMKT");
+  assert.equal(def.feed, "ETH/USD");
+  assert.equal(def.lower, 3000);
+  assert.equal(def.upper, 5000);
+  assert.equal(def.unit, "$");
+  assert.equal(def.longPool, 0); // hydrated live later
+  assert.equal(def.shortPool, 0);
+});
+
+test("mapScalarMarketRow tolerates a malformed params blob", () => {
+  const def = mapScalarMarketRow({ market_id: "0x1", question: "q", category: "MACRO", params: "not json" });
+  assert.equal(def.lower, 0);
+  assert.equal(def.upper, 0);
+  assert.equal(def.feed, "");
+});
+
+test("mapCategoricalMarketRow parses outcome labels from params", () => {
+  const def = mapCategoricalMarketRow({
+    market_id: "0xCAT", question: "Who wins?", category: "GEO",
+    params: JSON.stringify({ feed: "FUNCTIONS/ELECTION", outcome_count: 3, outcomes: ["A", "B", "C"] }),
+  });
+  assert.equal(def.feed, "FUNCTIONS/ELECTION");
+  assert.deepEqual(def.outcomes.map((o) => o.label), ["A", "B", "C"]);
+  assert.deepEqual(def.outcomes.map((o) => o.pool), [0, 0, 0]);
+});
+
+test("mapCategoricalMarketRow falls back to generic labels from outcome_count", () => {
+  const def = mapCategoricalMarketRow({
+    market_id: "0x1", question: "q", category: "MACRO",
+    params: JSON.stringify({ outcome_count: 2 }), // labels not stored
+  });
+  assert.deepEqual(def.outcomes.map((o) => o.label), ["Outcome 1", "Outcome 2"]);
 });
 
 test("sqlActiveProposals selects active", () => {

@@ -63,7 +63,8 @@ class MarketIndexRow:
     def from_scalar(cls, args, category: str = "", unit: str = "",
                     created_at: int = 0) -> "MarketIndexRow":
         params = json.dumps(
-            {"lower": int(args.lower), "upper": int(args.upper), "unit": unit},
+            {"feed": args.feed, "lower": int(args.lower), "upper": int(args.upper),
+             "unit": unit},
             sort_keys=True,
         )
         return cls(
@@ -77,7 +78,7 @@ class MarketIndexRow:
     def from_categorical(cls, args, category: str = "",
                          outcomes: Optional[List[str]] = None,
                          created_at: int = 0) -> "MarketIndexRow":
-        body: dict = {"outcome_count": int(args.outcome_count)}
+        body: dict = {"feed": args.feed, "outcome_count": int(args.outcome_count)}
         if outcomes:
             body["outcomes"] = list(outcomes)
         params = json.dumps(body, sort_keys=True)

@@ -1,11 +1,24 @@
 // Tableland SQL builders + row -> domain mappers. Pure (no network, no enums),
 // unit-tested with `node --test`. Column names match packages/shared/tableland/schema.sql.
 import type { Market, Prediction, GovernanceProposal } from "@oracleforge/shared/types";
+import type { ScalarMarketData } from "@/components/ScalarMarketCard";
+import type { CategoricalMarketData } from "@/components/CategoricalMarketCard";
 
 export type Row = Record<string, unknown>;
 
 const s = (v: unknown, dflt = ""): string => (v == null ? dflt : String(v));
 const n = (v: unknown, dflt = 0): number => (v == null ? dflt : Number(v));
+
+/** Parse the markets.params JSON blob; a malformed/absent value reads as {}. */
+function parseParams(v: unknown): Record<string, unknown> {
+  if (v == null) return {};
+  try {
+    const o = JSON.parse(String(v));
+    return o && typeof o === "object" ? (o as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
 
 // ---------------------------------------------------------------- SQL builders
 
@@ -15,6 +28,23 @@ export function sqlOpenMarkets(table: string, limit = 50): string {
     `yes_pool, no_pool, outcome, created_at, close_at, arweave_tx ` +
     `FROM ${table} WHERE status IN ('OPEN','CLOSED') ORDER BY close_at ASC LIMIT ${limit}`
   );
+}
+
+/** Open scalar/categorical markets from the index, by self-describing market_type. */
+function sqlTypedMarkets(table: string, marketType: string, limit: number): string {
+  return (
+    `SELECT market_id, question, category, market_type, params, status, created_at, close_at ` +
+    `FROM ${table} WHERE market_type='${marketType}' AND status IN ('OPEN','CLOSED') ` +
+    `ORDER BY close_at ASC LIMIT ${limit}`
+  );
+}
+
+export function sqlScalarMarkets(table: string, limit = 50): string {
+  return sqlTypedMarkets(table, "scalar", limit);
+}
+
+export function sqlCategoricalMarkets(table: string, limit = 50): string {
+  return sqlTypedMarkets(table, "categorical", limit);
 }
 
 export function sqlLatestPrediction(table: string, marketId: string): string {
@@ -51,6 +81,41 @@ export function mapMarketRow(r: Row): Market {
     createdAt: n(r.created_at),
     closeAt: n(r.close_at),
     arweaveTx: r.arweave_tx == null ? undefined : s(r.arweave_tx),
+  };
+}
+
+/** A scalar markets row -> ScalarMarketCard def. Pools start at 0 and are
+ *  hydrated live from the engine (lib/marketHydrate); the band/unit/feed come
+ *  from the index params the relayer wrote at createMarket. */
+export function mapScalarMarketRow(r: Row): ScalarMarketData {
+  const p = parseParams(r.params);
+  return {
+    id: s(r.market_id),
+    category: s(r.category),
+    question: s(r.question),
+    feed: s(p.feed),
+    lower: n(p.lower),
+    upper: n(p.upper),
+    unit: s(p.unit),
+    longPool: 0,
+    shortPool: 0,
+  };
+}
+
+/** A categorical markets row -> CategoricalMarketCard def. Outcome labels come
+ *  from the index params; a row that stored only a count falls back to generic
+ *  labels. Pools start at 0 and are hydrated live from the engine. */
+export function mapCategoricalMarketRow(r: Row): CategoricalMarketData {
+  const p = parseParams(r.params);
+  const labels = Array.isArray(p.outcomes)
+    ? (p.outcomes as unknown[]).map((o) => String(o))
+    : Array.from({ length: Math.max(2, n(p.outcome_count, 2)) }, (_, i) => `Outcome ${i + 1}`);
+  return {
+    id: s(r.market_id),
+    category: s(r.category),
+    question: s(r.question),
+    feed: s(p.feed),
+    outcomes: labels.map((label) => ({ label, pool: 0 })),
   };
 }
 

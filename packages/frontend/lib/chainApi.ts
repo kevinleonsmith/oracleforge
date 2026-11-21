@@ -12,7 +12,9 @@ import { getScalarMarkets as mockScalarMarkets, getCategoricalMarkets as mockCat
 import { queryTableland } from "./tableland";
 import {
   sqlOpenMarkets, sqlLatestPrediction, sqlConfidence, sqlActiveProposals,
-  mapMarketRow, mapPredictionRow, mapProposalRow, computeStats,
+  sqlScalarMarkets, sqlCategoricalMarkets,
+  mapMarketRow, mapPredictionRow, mapProposalRow,
+  mapScalarMarketRow, mapCategoricalMarketRow, computeStats,
 } from "./queries";
 
 const BYTES32 = /^0x[0-9a-fA-F]{64}$/;
@@ -47,29 +49,40 @@ export async function getActiveProposals(): Promise<GovernanceProposal[]> {
   return rows.map(mapProposalRow);
 }
 
-// Scalar + categorical markets aren't indexed in Tableland yet, so the catalog
-// (bands, labels) comes from the design-time defs; this refreshes each one's pools
-// from its engine when the market has a real on-chain id. Any read failure degrades
-// to the def, so the panels render regardless of chain state.
+// Scalar + categorical markets now come from the Tableland index (the relayer
+// writes a self-describing row per created market: market_type + a JSON params blob
+// for the band/labels). The catalog is read from there, then each market's pools are
+// refreshed live from its engine. If the gateway is unavailable, degrade to the
+// design-time defs so the panels still render.
 const dec = deployment.collateralDecimals;
 
 export async function getScalarMarkets(): Promise<ScalarMarketData[]> {
-  const defs = await mockScalarMarkets();
+  let defs: ScalarMarketData[];
+  try {
+    const rows = await queryTableland(sqlScalarMarkets(T.markets));
+    defs = rows.map(mapScalarMarketRow);
+  } catch {
+    return mockScalarMarkets(); // index unavailable -> design-time catalog
+  }
   return Promise.all(
-    defs.map(async (d) => {
-      if (!BYTES32.test(d.id)) return d;
-      return hydrateScalar(d, await readScalarMarketOnchain(d.id as `0x${string}`), dec);
-    })
+    defs.map(async (d) =>
+      BYTES32.test(d.id) ? hydrateScalar(d, await readScalarMarketOnchain(d.id as `0x${string}`), dec) : d
+    )
   );
 }
 
 export async function getCategoricalMarkets(): Promise<CategoricalMarketData[]> {
-  const defs = await mockCategoricalMarkets();
+  let defs: CategoricalMarketData[];
+  try {
+    const rows = await queryTableland(sqlCategoricalMarkets(T.markets));
+    defs = rows.map(mapCategoricalMarketRow);
+  } catch {
+    return mockCategoricalMarkets();
+  }
   return Promise.all(
-    defs.map(async (d) => {
-      if (!BYTES32.test(d.id)) return d;
-      return hydrateCategorical(d, await readCategoricalMarketOnchain(d.id as `0x${string}`), dec);
-    })
+    defs.map(async (d) =>
+      BYTES32.test(d.id) ? hydrateCategorical(d, await readCategoricalMarketOnchain(d.id as `0x${string}`), dec) : d
+    )
   );
 }
 

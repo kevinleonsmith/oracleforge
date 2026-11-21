@@ -65,7 +65,10 @@ class MarketIndexRowTests(unittest.TestCase):
         self.assertEqual(row.market_type, "scalar")
         self.assertEqual(row.ai_prob_bps, 0)  # not a committed-probability market
         params = json.loads(row.params)
-        self.assertEqual(params, {"lower": 3000, "upper": 5000, "unit": "$"})
+        self.assertEqual(params["lower"], 3000)
+        self.assertEqual(params["upper"], 5000)
+        self.assertEqual(params["unit"], "$")
+        self.assertEqual(params["feed"], args.feed)  # feed label carried for the catalog
         self.assertIn("'scalar'", row.sql())
 
     def test_categorical_params_carry_outcome_labels(self):
@@ -82,7 +85,7 @@ class MarketIndexRowTests(unittest.TestCase):
         args = build_categorical_create_market_args(CATEGORICAL_PROPOSAL, 10200, self.reg, NOW)
         row = MarketIndexRow.from_categorical(args, outcomes=None)
         params = json.loads(row.params)
-        self.assertEqual(params, {"outcome_count": 3})
+        self.assertEqual(params, {"feed": args.feed, "outcome_count": 3})
 
     def test_sql_escapes_single_quotes(self):
         args = build_create_market_args(BINARY_PROPOSAL, 6700, 10200, self.reg, NOW)
