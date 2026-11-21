@@ -236,6 +236,7 @@ a `>=`/`<=` comparator, behind a staleness guard and an optional fallback feed.
 | O2 | Low | **Fixed** | A fallback feed with different decimals silently mis-resolved |
 | O3 | Info | Documented | `maxStale == 0` disables the staleness check (foot-gun, by design) |
 | O4 | Info | Documented | Threshold-scaling, never-`Invalid`, at-threshold-`YES` semantics |
+| O5 | Low | **Fixed** | Scalar adapter: a feed with pathological decimals could revert/wrap `_rescale` instead of failing safe |
 
 ### O1 — Negative feed answers were resolved, not rejected _(Low, fixed)_
 
@@ -289,6 +290,31 @@ and improves on O2: because it rescales each feed to a configured `targetDecimal
 a fallback with different decimals than the primary is handled correctly, so it
 needs no decimal-match requirement. It reports a value rather than a yes/no, which
 the `ScalarMarketEngine` clamps into the market band.
+
+### O5 — Pathological feed decimals could break scalar rescaling _(Low, fixed)_
+
+`ScalarChainlinkAdapter._rescale` scales a feed answer by `10 ** (from - to)` where
+`from = feed.decimals()`. `targetDecimals` is capped at 36 at `configure`, but the
+feed's own decimals were **not** bounded. A feed reporting an absurd `decimals()`
+(e.g. 200+) would make the exponentiation overflow and revert — turning `latestValue`
+(a view `resolve()` depends on) into a denial of service rather than a fail-safe — or,
+for a value that fits in `uint256` but exceeds `int256` max, silently wrap the
+`int256(...)` cast negative and corrupt the settled value. Chainlink feeds report
+`decimals() <= 18`, so this is defense-in-depth against a misbehaving/compromised
+feed, but it was the one adapter path that did not fail safe.
+
+- **Fix:** `_read` now treats a feed whose `decimals() > MAX_TARGET_DECIMALS` (36) as
+  unhealthy, exactly like a stale or non-positive answer — the adapter stays
+  not-ready (or tries the fallback), so a pathological feed can never DoS or corrupt
+  resolution. `_rescale` therefore only ever sees `from <= 36`.
+- **Regression:** `test_pathologicalFeedDecimals_isNotReady` (no revert, fails safe),
+  `test_pathologicalPrimary_fallsBackToSaneFeed`, `test_maxFeedDecimals_boundaryAccepted`.
+
+The categorical oracle (`CategoricalChainlinkAdapter`) has no analogous path — it does
+no rescaling (an outcome index is a plain integer), rejects `< 0`, and maps a healthy
+answer above the `uint8` range to the invalid sentinel (`type(uint8).max`), which the
+engine voids. Its `onlyEngine`/`initEngine` binding and fallback/staleness posture
+match the other two adapters and were verified sound.
 
 ## What was checked and found sound
 

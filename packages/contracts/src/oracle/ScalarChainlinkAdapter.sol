@@ -101,7 +101,13 @@ contract ScalarChainlinkAdapter is IScalarOracleAdapter {
         (, int256 a,, uint256 updatedAt,) = feed.latestRoundData();
         if (a <= 0 || updatedAt == 0) return (false, 0, 0);
         if (maxStale != 0 && block.timestamp > updatedAt + maxStale) return (false, 0, 0);
-        return (true, a, feed.decimals());
+        // A feed reporting pathological decimals would make _rescale's 10**(from-to)
+        // overflow (revert) or wrap the int256 cast negative. Treat it as unhealthy
+        // and fail safe (stay not-ready / try the fallback), consistent with every
+        // other health failure — never let a bad feed DoS or corrupt resolution (O5).
+        uint8 dec = feed.decimals();
+        if (dec > MAX_TARGET_DECIMALS) return (false, 0, 0);
+        return (true, a, dec);
     }
 
     /// @dev Rescale a feed answer from `from` decimals to `to` decimals. Scaling

@@ -145,6 +145,37 @@ contract ScalarChainlinkAdapterTest is MiniTest {
         assertTrue(!ready, "no healthy feed -> not ready");
     }
 
+    // ------------------------------ pathological feed decimals fail safe (O5) ---
+
+    function test_pathologicalFeedDecimals_isNotReady() public {
+        // A feed reporting decimals > MAX_TARGET_DECIMALS would make _rescale's
+        // 10**(from-to) overflow/wrap. It must fail safe (not-ready), never revert.
+        MockAggregator huge = new MockAggregator(255, "broken feed");
+        huge.set(1_000_000);
+        _cfg(address(huge), address(0), 0, 0);
+        (bool ready,) = _value(); // does not revert
+        assertTrue(!ready, "pathological decimals -> not ready, no revert");
+    }
+
+    function test_pathologicalPrimary_fallsBackToSaneFeed() public {
+        // primary has absurd decimals (unhealthy); a sane fallback is used instead.
+        MockAggregator huge = new MockAggregator(200, "broken feed");
+        huge.set(42);
+        _cfg(address(huge), address(fb6), 0, 0);
+        fb6.set(4_000_000_000); // $4000 at 6 decimals
+        (bool ready, int256 v) = _value();
+        assertTrue(ready && v == 4000, "fell back past the pathological primary");
+    }
+
+    function test_maxFeedDecimals_boundaryAccepted() public {
+        // exactly MAX_TARGET_DECIMALS (36) is still a sane, accepted feed.
+        MockAggregator d36 = new MockAggregator(36, "36-dec feed");
+        d36.set(int256(5 * 10 ** 36)); // value 5 at 36 decimals
+        _cfg(address(d36), address(0), 0, 0); // -> whole units
+        (bool ready, int256 v) = _value();
+        assertTrue(ready && v == 5, "36 decimals accepted, rescaled to 5");
+    }
+
     // -------------------------------------------- end-to-end through the engine
 
     function test_endToEnd_settlesScalarMarketFromFeed() public {
