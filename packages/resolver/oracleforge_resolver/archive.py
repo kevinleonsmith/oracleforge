@@ -38,12 +38,18 @@ class LogReportSink:
 
     def __init__(self):
         self.reports: List[OracleReport] = []
+        self.proposals: List[tuple] = []  # (market_id, proposed_at)
 
     def record(self, report: OracleReport) -> None:
         self.reports.append(report)
         logger.info(
             "archived report %s -> outcome=%s", report.market_id, report.outcome
         )
+
+    def record_proposal(self, market_id: str, proposed_at: int) -> None:
+        """Note a propose (CLOSED) transition — in-memory, for the default sink."""
+        self.proposals.append((market_id, proposed_at))
+        logger.info("proposed %s at %s (dispute window open)", market_id, proposed_at)
 
 
 # --------------------------------------------------------------------------- #
@@ -145,6 +151,26 @@ class MarketStatusUpdate:
         return f"UPDATE {table} SET {', '.join(sets)} WHERE market_id={_q(self.market_id)};"
 
 
+@dataclass
+class MarketProposalUpdate:
+    """The *propose* transition of a ``markets`` row, under a nonzero challenge
+    window: ``resolve()`` moves the market from ``OPEN`` to ``CLOSED`` and stamps
+    ``proposed_at`` (the start of the dispute window). Without this the index would
+    still list a market whose outcome has been proposed as ``OPEN``, and the
+    optimistic-resolution panel could not read the dispute phase from the index. The
+    terminal ``RESOLVED``/``INVALID`` transition follows at finalize
+    (``MarketStatusUpdate``)."""
+
+    market_id: str
+    proposed_at: int
+
+    def sql(self, table: str = DEFAULT_MARKETS_TABLE) -> str:
+        return (
+            f"UPDATE {table} SET status='CLOSED', proposed_at={int(self.proposed_at)} "
+            f"WHERE market_id={_q(self.market_id)};"
+        )
+
+
 # --------------------------------------------------------------------------- #
 # Mutator seam — the signed on-chain write is the ONLY unexercised part         #
 # --------------------------------------------------------------------------- #
@@ -200,6 +226,7 @@ class TablelandReportSink:
         self.mutator = mutator or LogTablelandMutator()
         self.rows: List[OracleReportRow] = []
         self.updates: List[MarketStatusUpdate] = []
+        self.proposals: List[MarketProposalUpdate] = []
 
     def record(self, report: OracleReport) -> None:
         row = OracleReportRow.from_report(report)
@@ -211,3 +238,11 @@ class TablelandReportSink:
         update = MarketStatusUpdate.from_report(report)
         self.updates.append(update)
         self.mutator.mutate(update.sql(self.markets_table))
+
+    def record_proposal(self, market_id: str, proposed_at: int) -> None:
+        """Emit the propose (OPEN -> CLOSED) catalog transition, stamping the start
+        of the dispute window, so the index reflects a proposed-but-not-finalized
+        market."""
+        upd = MarketProposalUpdate(market_id=market_id, proposed_at=proposed_at)
+        self.proposals.append(upd)
+        self.mutator.mutate(upd.sql(self.markets_table))

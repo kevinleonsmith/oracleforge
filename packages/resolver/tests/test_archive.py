@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(_HERE, "..")))
 from oracleforge_resolver.archive import (  # noqa: E402
     LogReportSink,
     LogTablelandMutator,
+    MarketProposalUpdate,
     MarketStatusUpdate,
     OracleReportRow,
     RegistryTablelandMutator,
@@ -130,6 +131,20 @@ class MarketStatusUpdateTests(unittest.TestCase):
         self.assertIn("UPDATE markets_100_7 SET", sql)
 
 
+class MarketProposalUpdateTests(unittest.TestCase):
+    def test_propose_sets_closed_and_proposed_at(self):
+        sql = MarketProposalUpdate(market_id="0xabc", proposed_at=1_737_000_000).sql()
+        self.assertEqual(
+            sql,
+            "UPDATE markets SET status='CLOSED', proposed_at=1737000000 "
+            "WHERE market_id='0xabc';",
+        )
+
+    def test_custom_markets_table(self):
+        sql = MarketProposalUpdate("0x1", 5).sql("markets_100_7")
+        self.assertIn("UPDATE markets_100_7 SET status='CLOSED'", sql)
+
+
 class TablelandReportSinkTests(unittest.TestCase):
     def test_record_emits_both_insert_and_update(self):
         mutator = LogTablelandMutator()
@@ -147,6 +162,19 @@ class TablelandReportSinkTests(unittest.TestCase):
         sink = TablelandReportSink(mutator=mutator)
         sink.record(_binary_report(outcome=-1, answer=None))
         self.assertIn("UPDATE markets SET status='INVALID'", mutator.statements[1])
+
+    def test_record_proposal_emits_closed_update(self):
+        mutator = LogTablelandMutator()
+        sink = TablelandReportSink(mutator=mutator)
+        sink.record_proposal("0xabc", 1_737_000_000)
+        self.assertEqual(len(sink.proposals), 1)
+        self.assertEqual(len(mutator.statements), 1)
+        self.assertIn("UPDATE markets SET status='CLOSED', proposed_at=1737000000", mutator.statements[0])
+
+    def test_log_sink_record_proposal_collects_in_memory(self):
+        sink = LogReportSink()
+        sink.record_proposal("0x1", 42)
+        self.assertEqual(sink.proposals, [("0x1", 42)])
 
     def test_default_mutator_is_log(self):
         sink = TablelandReportSink()

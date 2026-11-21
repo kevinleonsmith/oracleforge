@@ -121,6 +121,8 @@ class DisputeWindowTests(unittest.TestCase):
         self.assertEqual(resolver.resolved, [M_YES])  # propose tx sent
         self.assertEqual(resolver.finalized, [])
         self.assertEqual(sink.reports, [])            # NOT archived until finalized
+        # but the catalog is transitioned OPEN -> CLOSED, stamping the window start
+        self.assertEqual(sink.proposals, [(M_YES, NOW)])
 
     def test_closed_inside_window_waits(self):
         markets = [Market(M_YES, NOW - DAY, Status.Closed, proposed_at=NOW - 100, feed="EUR/USD")]

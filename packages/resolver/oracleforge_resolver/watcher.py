@@ -21,6 +21,15 @@ from .sources import MarketSource
 logger = logging.getLogger("oracleforge.resolver")
 
 
+def _emit_proposal(sink, market_id: str, proposed_at: int) -> None:
+    """Record the propose (OPEN -> CLOSED) catalog transition if the sink supports
+    it. A plain report sink (in-memory / capturing) without ``record_proposal`` is a
+    no-op, so this stays additive across every sink."""
+    fn = getattr(sink, "record_proposal", None)
+    if fn is not None:
+        fn(market_id, proposed_at)
+
+
 @dataclass
 class TickOutcome:
     market_id: str
@@ -92,6 +101,7 @@ class Watcher:
         # With a challenge window the outcome is only *proposed* and can still be
         # disputed, so we don't archive it as settled yet — finalize() does that.
         if self.challenge_window > 0:
+            _emit_proposal(self.sink, market.market_id, self._now())
             return TickOutcome(market.market_id, "resolve", "proposed", reason, tx, predicted)
         self._archive(market, predicted, tx)
         return TickOutcome(market.market_id, "resolve", "resolved", reason, tx, predicted)
@@ -178,6 +188,7 @@ class ScalarWatcher:
         # Under a window the value is only proposed and may still be disputed, so
         # we don't archive it yet — finalize() does.
         if self.challenge_window > 0:
+            _emit_proposal(self.sink, market.market_id, self._now())
             return TickOutcome(market.market_id, "resolve", "proposed", reason, tx)
         self._archive(market, value, tx)
         return TickOutcome(market.market_id, "resolve", "resolved", reason, tx)
@@ -267,6 +278,7 @@ class CategoricalWatcher:
         # Under a window the outcome is only proposed and may still be disputed, so
         # we don't archive it yet — finalize() does.
         if self.challenge_window > 0:
+            _emit_proposal(self.sink, market.market_id, self._now())
             return TickOutcome(market.market_id, "resolve", "proposed", reason, tx, predicted)
         self._archive(market, predicted, tx)
         return TickOutcome(market.market_id, "resolve", "resolved", reason, tx, predicted)

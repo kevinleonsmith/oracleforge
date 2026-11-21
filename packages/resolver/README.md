@@ -98,8 +98,13 @@ statements — an `oracle_reports` **INSERT** (the evidence) and a `markets` **U
 that transitions the catalog row to its terminal state (`MarketStatusUpdate`: a void
 sets `status='INVALID'`, otherwise `status='RESOLVED', outcome=<n>`) — and sends both
 through a `TablelandMutator`. Without the UPDATE the index would keep listing a settled
-market as `OPEN`. Both statements are built purely (escaped, column-ordered to the
-shared schema) and are identical whether a dry-run logs them (`LogTablelandMutator`,
+market as `OPEN`. Earlier, under a nonzero challenge window, the *propose* step
+(`resolve()`) emits its own `markets` UPDATE via `sink.record_proposal`
+(`MarketProposalUpdate`: `status='CLOSED', proposed_at=<t>`), so the index tracks a
+market through its dispute window — `OPEN → CLOSED → RESOLVED/INVALID` — rather than
+jumping straight from open to gone. Both statements are built purely (escaped,
+column-ordered to the shared schema) and are identical whether a dry-run logs them
+(`LogTablelandMutator`,
 what `--tableland` uses) or the live path signs and broadcasts them
 (`RegistryTablelandMutator`). So the whole write-back — mapping, column order, SQL,
 escaping — is exercised and tested; the only unexercised seam is the signed
