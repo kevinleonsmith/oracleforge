@@ -20,10 +20,18 @@ scenarios — a value inside the band (both sides paid), a clamped value (LONG t
 all, SHORT claims 0 without reverting), and a one-sided **void** (principals
 refunded).
 
+And the **categorical** engine (`categorical_devnet.py`): it deploys the real
+`CategoricalMarketEngine` + `MockCategoricalOracle`, runs the N-outcome lifecycle,
+and asserts the on-chain payouts equal the `categorical_settle()` port across a
+funded winner (winning pool splits the pot pro-rata, losers' claims revert), an
+empty winning outcome (**void**, refunded), and the oracle's invalid sentinel
+(**void**, refunded).
+
 ```bash
-npm run devnet          # binary demo (prints on-chain vs port, side by side)
-npm run devnet:scalar   # scalar demo (mid-band / clamp / void scenarios)
-npm run test:devnet     # all parity assertions (binary YES/NO + scalar ×3)
+npm run devnet              # binary demo (prints on-chain vs port, side by side)
+npm run devnet:scalar       # scalar demo (mid-band / clamp / void scenarios)
+npm run devnet:categorical  # categorical demo (winner / empty-void / invalid-void)
+npm run test:devnet         # all parity assertions (binary ×2 + scalar ×3 + categorical ×3)
 ```
 
 ```
@@ -38,14 +46,16 @@ npm run test:devnet     # all parity assertions (binary YES/NO + scalar ×3)
 
 - **Real contracts, real node.** For binary, `MarketEngine`, `Treasury`,
   `MockERC20` and a settable `MockOracleAdapter`; for scalar, `ScalarMarketEngine`
-  and `MockScalarOracle` — all deployed with `forge create` to a live anvil.
+  and `MockScalarOracle`; for categorical, `CategoricalMarketEngine` and
+  `MockCategoricalOracle` — all deployed with `forge create` to a live anvil.
   Positions, resolution and claims are real transactions read back from event
   logs. The only shortcut is the oracle value (set directly, so the harness
   controls the outcome — the Chainlink-fed paths are covered by the Foundry tests).
-- **One scenario per engine, two sides checked.** The binary positions come from
-  `pipeline.DEMO_POSITIONS` and the scalar ones from `SCALAR_DEMO_POSITIONS`, so
-  the devnet and the port settle the identical books; each test asserts the
-  Solidity result matches its Python port (`settle` / `scalar_settle`) to the wei.
+- **One book per engine, checked to the wei.** The binary positions come from
+  `pipeline.DEMO_POSITIONS`, the scalar from `SCALAR_DEMO_POSITIONS`, the
+  categorical from `CATEGORICAL_DEMO_POSITIONS`, so the devnet and the port settle
+  the identical books; each test asserts the Solidity result matches its Python
+  port (`settle` / `scalar_settle` / `categorical_settle`) to the wei.
 - **Ephemeral + self-cleaning.** Each run picks a random port and tears the node
   down in a `finally`, so repeated or parallel runs never collide.
 

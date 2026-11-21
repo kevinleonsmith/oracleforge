@@ -10,9 +10,12 @@ import unittest
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from pipeline import (  # noqa: E402
+    CATEGORICAL_DEMO_OUTCOMES,
+    CATEGORICAL_DEMO_POSITIONS,
     FEE_BPS,
     SCALAR_DEMO_BAND,
     SCALAR_DEMO_POSITIONS,
+    categorical_settle,
     run_pipeline,
     scalar_settle,
     settle,
@@ -112,6 +115,49 @@ class TestScalarSettlement(unittest.TestCase):
             s = scalar_settle(SCALAR_DEMO_POSITIONS, v, lower, upper)
             self.assertGreaterEqual(s.long_payout, last)
             last = s.long_payout
+
+
+class TestCategoricalSettlement(unittest.TestCase):
+    """categorical_settle() must reproduce CategoricalMarketEngine resolve + claim."""
+
+    def test_matches_hand_computed_contract_math(self):
+        # outcome 0 = Alice 600 + Bob 400 (1000); outcome 1 = Carol 500;
+        # outcome 2 = Dave 500. Winner 0. pot 2000, losing 1000, fee 20, net 980.
+        s = categorical_settle(CATEGORICAL_DEMO_POSITIONS, 0, CATEGORICAL_DEMO_OUTCOMES)
+        self.assertEqual(s.winning_pool, 1000)
+        self.assertEqual(s.fee, (1000 * FEE_BPS) // 10_000)   # 20
+        self.assertEqual(s.losing_pool_net, 980)
+        self.assertEqual(s.payouts["0xAlice"], 600 + (600 * 980) // 1000)  # 1188
+        self.assertEqual(s.payouts["0xBob"], 400 + (400 * 980) // 1000)    # 792
+        self.assertNotIn("0xCarol", s.payouts)  # losers get nothing
+        self.assertNotIn("0xDave", s.payouts)
+        self.assertFalse(s.void)
+
+    def test_empty_winning_outcome_voids_and_refunds(self):
+        # a 3-outcome book with stake only on 0 and 1; outcome 2 wins -> void
+        book = [("a", 0, 100), ("b", 1, 200)]
+        funded = categorical_settle(book, 1, 3)
+        self.assertFalse(funded.void)  # outcome 1 has stake -> settles
+        empty = categorical_settle(book, 2, 3)
+        self.assertTrue(empty.void)    # outcome 2 empty -> void
+        self.assertEqual(empty.fee, 0)
+        self.assertEqual(empty.payouts, {"a": 100, "b": 200})
+
+    def test_invalid_sentinel_voids(self):
+        s = categorical_settle(CATEGORICAL_DEMO_POSITIONS, 0xFF, CATEGORICAL_DEMO_OUTCOMES)
+        self.assertTrue(s.void)
+        self.assertEqual(s.fee, 0)
+        self.assertEqual(sum(s.payouts.values()), 2000)  # all principal refunded
+
+    def test_value_is_conserved_including_dust(self):
+        # For any book and winner: paid + fee + dust == staked, dust non-negative.
+        for w0, w1, l in [(1, 999, 500), (1000, 1, 7), (333, 667, 10_000)]:
+            s = categorical_settle(
+                [("w1", 0, w0), ("w2", 0, w1), ("l1", 1, l)], 0, 2)
+            self.assertEqual(s.total_paid + s.fee + s.dust, s.total_staked,
+                             msg=f"w0={w0} w1={w1} l={l}")
+            self.assertGreaterEqual(s.dust, 0)
+            self.assertEqual(s.fee, (l * FEE_BPS) // 10_000)
 
 
 class TestPipelineBoundaries(unittest.TestCase):

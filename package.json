@@ -31,6 +31,7 @@
     "e2e": "cd integration && python3 pipeline.py",
     "devnet": "cd integration/anvil && python3 devnet.py",
     "devnet:scalar": "cd integration/anvil && python3 scalar_devnet.py",
+    "devnet:categorical": "cd integration/anvil && python3 categorical_devnet.py",
     "test": "npm run test:contracts && npm run test:ai && npm run test:cartesi && npm run test:relayer && npm run test:resolver && npm run test:archiver && npm run test:frontend && npm run test:inference && npm run test:lit && npm run test:e2e"
   },
   "engines": { "node": ">=20" }

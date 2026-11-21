@@ -194,6 +194,95 @@ def scalar_settle(positions: list[tuple[str, str, int]], settled_value: int,
 
 
 # --------------------------------------------------------------------------- #
+# Stage 3c — CATEGORICAL (N-outcome) settlement, a byte-for-byte port of       #
+#            CategoricalMarketEngine resolve + claim (and the no-winner void). #
+# --------------------------------------------------------------------------- #
+# The reference categorical scenario, shared by the anvil devnet so both settle
+# the identical book: (account, outcome_index, stake).
+CATEGORICAL_DEMO_POSITIONS: list[tuple[str, int, int]] = [
+    ("0xAlice", 0, 600),
+    ("0xBob", 0, 400),
+    ("0xCarol", 1, 500),
+    ("0xDave", 2, 500),
+]
+CATEGORICAL_DEMO_OUTCOMES = 3  # outcomeCount
+
+
+@dataclass
+class CategoricalSettlement:
+    winning_outcome: int
+    outcome_count: int
+    pools: list                # staked total per outcome index
+    winning_pool: int
+    losing_pool_net: int       # distributable losing pool after fee
+    fee: int
+    payouts: dict              # account -> payout (winners only, or all on void)
+    dust: int                  # floor-division remainder left in the contract
+    void: bool                 # no winner / invalid -> refunded, nothing settled
+
+    @property
+    def total_staked(self) -> int:
+        return sum(self.pools)
+
+    @property
+    def total_paid(self) -> int:
+        return sum(self.payouts.values())
+
+
+def categorical_settle(positions: list[tuple[str, int, int]], winning_outcome: int,
+                       outcome_count: int, fee_bps: int = FEE_BPS) -> CategoricalSettlement:
+    """Settle categorical (N-outcome) positions exactly as
+    ``CategoricalMarketEngine`` does on-chain.
+
+    ``positions`` is a list of ``(account, outcome_index, stake)``. The winning
+    pool takes the entire losing pot (minus the fee) pro-rata to stake; each
+    winner is paid ``stake + stake * losingPoolNet // winningPool`` (floor
+    division, so a few wei of dust stay in the contract, as in Solidity). An
+    out-of-range winner (``>= outcome_count``, e.g. the 0xFF invalid sentinel) or a
+    winning pool with no stake **voids**: every principal is refunded, no fee.
+    """
+    pools = [0] * outcome_count
+    for _acct, outcome, stake in positions:
+        if 0 <= outcome < outcome_count:
+            pools[outcome] += stake
+    accounts = list(dict.fromkeys(a for a, _, _ in positions))
+
+    winning_pool = pools[winning_outcome] if 0 <= winning_outcome < outcome_count else 0
+
+    # Out-of-range winner or no stake on the winner -> void & refund principal.
+    if winning_outcome >= outcome_count or winning_pool == 0:
+        refunds: dict[str, int] = defaultdict(int)
+        for acct, _outcome, stake in positions:
+            refunds[acct] += stake
+        return CategoricalSettlement(
+            winning_outcome, outcome_count, pools, winning_pool, 0, 0,
+            {a: refunds[a] for a in accounts}, 0, void=True)
+
+    total_pot = sum(pools)
+    losing_pool = total_pot - winning_pool
+    fee = (losing_pool * fee_bps) // 10_000
+    losing_net = losing_pool - fee
+
+    # Aggregate winning-outcome stake per account, then one floor-division each —
+    # exactly as claim() reads stakeOf[market][account][winningOutcome].
+    win_stake: dict[str, int] = defaultdict(int)
+    for acct, outcome, stake in positions:
+        if outcome == winning_outcome:
+            win_stake[acct] += stake
+
+    payouts: dict[str, int] = {}
+    for acct in accounts:
+        s = win_stake[acct]
+        if s > 0:  # losers get nothing (their claim reverts on-chain)
+            payouts[acct] = s + (s * losing_net) // winning_pool
+
+    dust = (winning_pool + losing_net) - sum(payouts.values())
+    return CategoricalSettlement(
+        winning_outcome, outcome_count, pools, winning_pool, losing_net, fee,
+        payouts, dust, void=False)
+
+
+# --------------------------------------------------------------------------- #
 # Pipeline result                                                             #
 # --------------------------------------------------------------------------- #
 @dataclass

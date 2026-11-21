@@ -129,9 +129,17 @@ one, or an admin can deliberately void by arbitrating an out-of-range index.
   or a number (`--dry-run --categorical`). The out-of-range sentinel `0xFF` is the
   void signal. 10 planner + 7 watcher tests.
 
+- **Devnet parity:** `integration/anvil/categorical_devnet.py` boots a real anvil
+  node, deploys the actual `CategoricalMarketEngine` + `MockCategoricalOracle`, runs
+  the full N-outcome lifecycle on-chain, and asserts the payouts equal a Python port
+  (`pipeline.categorical_settle`) **to the wei** — across a funded winner (pro-rata
+  split, losers' claims revert), an empty winning outcome (void), and the oracle's
+  invalid sentinel (void). So categorical settlement is checked against the contract
+  it mirrors, in CI (`npm run test:devnet`), exactly as the binary and scalar engines are.
+
 So categorical markets are now **created and settled by the workers** end to end,
-on top of the contract engine and its dispute window.
+on top of the contract engine and its dispute window, and the settlement math is
+proven on-chain — not just in the port and fuzz tests.
 
 **Next (the rest of the vertical, as it was built out for scalar):**
-- a **frontend** panel (per-outcome pools, implied probabilities, payout preview);
-- **devnet parity** against the real engine, like the binary and scalar engines.
+- a **frontend** panel (per-outcome pools, implied probabilities, payout preview).
