@@ -43,7 +43,7 @@ a benign error, not a crash.
 | `sources.py` | `StaticMarketSource` (dry-run) · `TablelandMarketSource` (live, read-only) |
 | `oracle.py` | `StubOracleView`/`ChainOracleView` (binary `resolve()`) · `StubScalarOracleView`/`ChainScalarOracleView` (scalar `latestValue()`) |
 | `chain.py` | `GnosisResolver` (web3) · `DryRunResolver` (no network) — shared `resolve()`/`finalize()` drive both engines |
-| `archive.py` | `LogReportSink` (default) · `TablelandReportSink` (write TODO) |
+| `archive.py` | `LogReportSink` (default) · `TablelandReportSink` → `oracle_reports` INSERT via a `TablelandMutator` (`LogTablelandMutator` dry-run · `RegistryTablelandMutator` signed) |
 | `watcher.py` | orchestration: `Watcher` (binary) · `ScalarWatcher` (range), each `tick()` once / `watch()` loops |
 
 ## Scalar (range) markets
@@ -59,6 +59,7 @@ yes/no) and archiving the settled value. See [`docs/SCALAR-MARKETS.md`](../../do
 # one tick over a sample spread (no chain): shows wait/pending/resolve/settled
 python3 -m oracleforge_resolver.cli --dry-run
 python3 -m oracleforge_resolver.cli --dry-run --scalar   # the scalar-market variant
+python3 -m oracleforge_resolver.cli --dry-run --tableland # also print the oracle_reports INSERTs
 
 # tests (stdlib only)
 python3 -m unittest discover -s tests -t .
@@ -84,7 +85,15 @@ The oracle adapter address is read from `engine.oracle()` unless
 
 ## Archival
 
-A settlement produces an `OracleReport` (market, outcome, time, feed, tx). Today
-it goes to `LogReportSink`; the `oracle_reports` Tableland row + Arweave evidence
-bundle (`oracle_reports.arweave_tx`) land with the archival worker — `archive.py`
-already defines the sink interface.
+A settlement produces an `OracleReport` (market, outcome, time, feed, tx). The
+default `LogReportSink` keeps it in memory; `TablelandReportSink` turns it into an
+`oracle_reports` **INSERT** and sends it through a `TablelandMutator`. The statement
+is built purely (`OracleReportRow.sql`, escaped and column-ordered to the shared
+schema) and is identical whether a dry-run logs it (`LogTablelandMutator`, what
+`--tableland` uses) or the live path signs and broadcasts it
+(`RegistryTablelandMutator`). So the whole write-back — mapping, column order, SQL,
+escaping — is exercised and tested; the only unexercised seam is the signed
+registry mutation (needs a writer key + RPC). The resolver fills the
+resolution-evidence columns (`market_id`, `feed`, `answer`/settled value, `outcome`,
+`reported_at`); the archival worker later back-fills `oracle_reports.arweave_tx`
+with the Arweave evidence bundle.

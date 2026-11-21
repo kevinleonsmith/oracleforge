@@ -64,11 +64,22 @@ def main(argv=None) -> int:
     ap.add_argument("--watch", action="store_true", help="live loop against the chain")
     ap.add_argument("--interval", type=float, default=None)
     ap.add_argument("--once", action="store_true", help="live: a single tick then exit")
+    ap.add_argument("--tableland", action="store_true",
+                    help="archive settlements as oracle_reports INSERTs (dry-run: prints the SQL)")
     args = ap.parse_args(argv)
 
-    from .archive import LogReportSink
+    from .archive import LogReportSink, TablelandReportSink
     from .config import Config
     from .watcher import Watcher
+
+    def _make_sink():
+        return TablelandReportSink() if args.tableland else LogReportSink()
+
+    def _print_archive(sink) -> None:
+        if isinstance(sink, TablelandReportSink) and sink.mutator.statements:
+            print("\narchive -> oracle_reports (would sign & send):")
+            for stmt in sink.mutator.statements:
+                print(f"  {stmt}")
 
     if not args.watch:  # default: dry-run
         from .chain import DryRunResolver
@@ -85,14 +96,16 @@ def main(argv=None) -> int:
                 markets[0].market_id: (True, 4200),  # ready -> propose value
                 markets[2].market_id: (False, 0),    # feed not ready
             }
+            sink = _make_sink()
             watcher = ScalarWatcher(
                 DryRunResolver(), StubScalarOracleView(values),
-                StaticMarketSource(markets), LogReportSink(), now_fn=lambda: now,
+                StaticMarketSource(markets), sink, now_fn=lambda: now,
             )
             results = watcher.tick()
             _print_scalar(results)
             resolved = sum(1 for r in results if r.status == "resolved")
             print(f"\n{resolved} scalar market(s) resolved (dry-run).")
+            _print_archive(sink)
             return 0
 
         from .oracle import StubOracleView
@@ -103,14 +116,16 @@ def main(argv=None) -> int:
             markets[1].market_id: Outcome.No,
             markets[3].market_id: Outcome.Pending,
         }
+        sink = _make_sink()
         watcher = Watcher(
             DryRunResolver(), StubOracleView(outcomes),
-            StaticMarketSource(markets), LogReportSink(), now_fn=lambda: now,
+            StaticMarketSource(markets), sink, now_fn=lambda: now,
         )
         results = watcher.tick()
         _print(results)
         resolved = sum(1 for r in results if r.status == "resolved")
         print(f"\n{resolved} market(s) resolved (dry-run).")
+        _print_archive(sink)
         return 0
 
     # live
@@ -126,7 +141,18 @@ def main(argv=None) -> int:
     oracle_view = ChainOracleView(resolver.w3, oracle_addr)
     source = TablelandMarketSource(cfg.tableland_gateway, cfg.markets_table)
     window = resolver.challenge_window()  # 0 => instant finalization, like before
-    watcher = Watcher(resolver, oracle_view, source, LogReportSink(), challenge_window=window)
+
+    if args.tableland:
+        from .archive import RegistryTablelandMutator
+
+        if not cfg.private_key:
+            ap.error("--tableland (live) needs RESOLVER_PK to sign the oracle_reports write")
+        mutator = RegistryTablelandMutator(
+            cfg.rpc_url, cfg.oracle_address or "", 0, cfg.chain_id, cfg.private_key)
+        sink: object = TablelandReportSink(cfg.reports_table, mutator)
+    else:
+        sink = LogReportSink()
+    watcher = Watcher(resolver, oracle_view, source, sink, challenge_window=window)
 
     try:
         if args.once:

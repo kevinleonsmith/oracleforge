@@ -17,6 +17,7 @@ class Config:
     oracle_address: str  # optional override; else read from engine.oracle()
     tableland_gateway: str
     markets_table: str
+    reports_table: str
     interval: float
 
     @classmethod
@@ -33,5 +34,6 @@ class Config:
                 "NEXT_PUBLIC_TABLELAND_GATEWAY", "https://tableland.network"
             ),
             markets_table=os.environ.get("MARKETS_TABLE", "markets"),
+            reports_table=os.environ.get("ORACLE_REPORTS_TABLE", "oracle_reports"),
             interval=float(os.environ.get("RESOLVER_INTERVAL", "30")),
         )
