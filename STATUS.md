@@ -3,7 +3,7 @@
 _Last updated: 2026-11-20_
 
 MVP of an autonomous AI prediction-market protocol on Gnosis Chain. **11 packages,
-451 passing tests** (incl. parimutuel settlement fuzzed for its invariants,
+457 passing tests** (incl. parimutuel settlement fuzzed for its invariants,
 stateful solvency proven across randomly-interleaved market histories, and a
 cross-package end-to-end that threads one market through every worker). Every
 off-chain worker, pure-logic layer, smart contract, and
@@ -43,8 +43,8 @@ Akash embeddings ─▶ Cartesi deterministic forecast ─▶ relayer createMark
 | `lit` | token-gated / encrypted private markets (Lit Protocol) | TypeScript | **14** | `npm run lit` |
 | `frontend` | Next.js terminal UI; live Tableland + viem reads, switchable with mock; **optimistic-resolution panel** (live challenge countdown, dispute/finalize); **scalar-market panel** (band, implied value, live LONG/SHORT payout); **categorical-market panel** (per-outcome implied probabilities, winner-take-all payout preview); **all three market types flow through the mock/chain facade** — scalar + categorical read from the Tableland `markets` index (`market_type` + JSON `params` parsed into the card defs), pools hydrated live from their engines, pure SQL builders + row mappers unit-tested; **protocol stats (TVL + active-market count) aggregate across all three market types** | TypeScript | **46** | `npm run dev` |
 | `shared` | Tableland SQL schema + shared TypeScript types | SQL + TS | — | — |
-| `integration` | end-to-end thread across every worker + contract-exact settlement (binary + scalar + categorical ports); **cross-engine thread** (one question → all three engines, proving identical marketId derivation / dedupe + per-type settlement + self-describing index rows); **anvil devnet** parity vs the real `MarketEngine`, `ScalarMarketEngine` **and `CategoricalMarketEngine`** | Python + Foundry | **22** (+8 devnet) | `npm run e2e` · `npm run devnet*` |
-| | | | **451** | `npm test` |
+| `integration` | end-to-end thread across every worker + contract-exact settlement (binary + scalar + categorical ports); **cross-engine thread** (one question → all three engines, proving identical marketId derivation / dedupe + per-type settlement + self-describing index rows); **schema-conformance** (the real SQL the relayer/resolver/archiver emit is executed and round-tripped against `schema.sql` in in-memory SQLite — the full `markets` lifecycle + `oracle_reports`, catching column/type drift the string tests miss); **anvil devnet** parity vs the real `MarketEngine`, `ScalarMarketEngine` **and `CategoricalMarketEngine`** | Python + Foundry | **28** (+8 devnet) | `npm run e2e` · `npm run devnet*` |
+| | | | **457** | `npm test` |
 
 ## The determinism boundary (the key design decision)
 
@@ -222,7 +222,7 @@ every PR, as three jobs:
 
 | Check | What it does |
 |-------|--------------|
-| `all tests` | Node 22 + Python 3.11 + Foundry + PyYAML, runs `npm test` (all 451 tests) |
+| `all tests` | Node 22 + Python 3.11 + Foundry + PyYAML, runs `npm test` (all 457 tests) |
 | `frontend build` | `npm install` + `next build` in `packages/frontend` — compiles the TSX and type-checks the whole app (the one thing the stdlib test suite can't cover) |
 | `anvil devnet parity` | boots a real anvil node, deploys the actual contracts, and asserts on-chain payouts equal the Python ports — binary `MarketEngine` vs `settle()`, `ScalarMarketEngine` vs `scalar_settle()`, and `CategoricalMarketEngine` vs `categorical_settle()` (`npm run test:devnet`) |
 
