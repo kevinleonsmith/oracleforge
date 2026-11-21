@@ -72,7 +72,14 @@ At `v = 150`, a trader holding the entire 600 LONG pool receives `490 * 600/600 
 - **Value conservation** holds for any book and any settlement value:
   `sum(payouts) + fee + dust == deposits`, where `dust` is sub-wei floor-division
   rounding retained in the contract (bounded by the number of claimants). Proven by
-  `testFuzz_settlementConservesValue` (512 runs).
+  `testFuzz_settlementConservesValue` (512 runs), and — across an *arbitrary history*
+  of interleaved markets, not just one settlement — by the **stateful solvency
+  invariants** in `ScalarMarketEngineInvariant.t.sol`: a handler drives random
+  create/position/resolve/claim sequences with oracle values spanning below / inside
+  / above the band (so the clamp reaches SHORT-all, a mid-band split, and LONG-all)
+  and markets that drew one-sided books (the structural void), asserting the engine
+  stays solvent (balance + payouts + fees == deposits) and the treasury holds exactly
+  the fees skimmed, after any history (3 invariants).
 - **Monotonicity:** a higher settlement value never pays the LONG side less —
   `testFuzz_longPayoutMonotoneInValue` (512 runs).
 - **Fee is snapshotted** at creation, so an admin can't change the economics of an
@@ -116,8 +123,9 @@ clamps and compares the adapter's rescaled value against `lower`/`upper` directl
 ## Status & follow-ups
 
 **Done — the full vertical:**
-- **Engine** (14 lifecycle/settlement + 2 fuzz properties) and its **optimistic
-  dispute window** (propose → challenge → finalize → arbitrate, 7 tests).
+- **Engine** (14 lifecycle/settlement + 2 fuzz properties + 3 stateful solvency
+  invariants) and its **optimistic dispute window** (propose → challenge → finalize →
+  arbitrate, 7 tests).
 - **Oracle:** the `IScalarOracleAdapter` interface + mock and the production
   `ScalarChainlinkAdapter` (16 tests, incl. an end-to-end settle through the engine).
 - **Relayer:** `build_scalar_create_market_args` / `Relayer.run_scalar` create scalar
