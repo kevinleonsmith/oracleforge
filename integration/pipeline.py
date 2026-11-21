@@ -31,6 +31,7 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
+from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -100,6 +101,96 @@ def settle(positions: list[tuple[str, str, int]], outcome_yes: bool,
                 payouts[acct] = payouts.get(acct, 0) + stake + (stake * losing_after) // winning_pool
     dust = (winning_pool + losing_after) - sum(payouts.values())
     return Settlement(outcome_yes, yes_pool, no_pool, winning_pool, losing_after, fee, payouts, dust)
+
+
+# --------------------------------------------------------------------------- #
+# Stage 3b — SCALAR (range) settlement, a byte-for-byte port of               #
+#            ScalarMarketEngine._payoutPools + claim (and the one-sided void). #
+# --------------------------------------------------------------------------- #
+# The reference scalar scenario, shared by the anvil devnet so both settle the
+# identical book: (account, "LONG"|"SHORT", stake).
+SCALAR_DEMO_POSITIONS: list[tuple[str, str, int]] = [
+    ("0xAlice", "LONG", 600),
+    ("0xBob", "LONG", 400),
+    ("0xCarol", "SHORT", 500),
+    ("0xDave", "SHORT", 300),
+]
+SCALAR_DEMO_BAND = (100, 200)  # [lower, upper]
+
+
+@dataclass
+class ScalarSettlement:
+    settled_value: int        # clamped into [lower, upper]
+    lower: int
+    upper: int
+    long_pool: int
+    short_pool: int
+    fee: int
+    long_payout: int          # LONG side's collective share (after fee)
+    short_payout: int         # SHORT side's collective share (remainder)
+    payouts: dict             # account -> payout (every staker; may be 0)
+    dust: int                 # floor-division remainder left in the contract
+    void: bool                # one-sided book -> refunded, nothing settled
+
+    @property
+    def total_staked(self) -> int:
+        return self.long_pool + self.short_pool
+
+    @property
+    def total_paid(self) -> int:
+        return sum(self.payouts.values())
+
+
+def scalar_settle(positions: list[tuple[str, str, int]], settled_value: int,
+                  lower: int, upper: int, fee_bps: int = FEE_BPS) -> ScalarSettlement:
+    """Settle scalar (range) positions exactly as ``ScalarMarketEngine`` does.
+
+    ``positions`` is a list of ``(account, "LONG"|"SHORT", stake)``. The value is
+    clamped into ``[lower, upper]`` and converted to a fraction
+    ``f = (cv - lower) / (upper - lower)``; the pot minus the fee is split
+    ``long = distributable * f`` / ``short = remainder``, and each account takes
+    its pro-rata share of its side (floor division per side, summed — the exact
+    order of operations in ``claim``). A one-sided book **voids**: every principal
+    is refunded, no fee. Mirrors the contract's integer math to the wei.
+    """
+    long_pool = sum(s for _, side, s in positions if side == "LONG")
+    short_pool = sum(s for _, side, s in positions if side == "SHORT")
+    accounts = list(dict.fromkeys(a for a, _, _ in positions))
+
+    # One-sided book -> void and refund principal (deterministic; skips the pot math).
+    if long_pool == 0 or short_pool == 0:
+        refunds: dict[str, int] = defaultdict(int)
+        for acct, _side, stake in positions:
+            refunds[acct] += stake
+        cv = lower if settled_value < lower else (upper if settled_value > upper else settled_value)
+        return ScalarSettlement(cv, lower, upper, long_pool, short_pool, 0, 0, 0,
+                                {a: refunds[a] for a in accounts}, 0, void=True)
+
+    cv = lower if settled_value < lower else (upper if settled_value > upper else settled_value)
+    pot = long_pool + short_pool
+    fee = (pot * fee_bps) // 10_000
+    distributable = pot - fee
+    num = cv - lower
+    den = upper - lower
+    long_payout = (distributable * num) // den
+    short_payout = distributable - long_payout  # remainder, no dust lost at this split
+
+    # Aggregate stake per (account, side) first, then one floor-division per side —
+    # exactly as claim() reads stakeOf[market][account][side].
+    long_stake: dict[str, int] = defaultdict(int)
+    short_stake: dict[str, int] = defaultdict(int)
+    for acct, side, stake in positions:
+        (long_stake if side == "LONG" else short_stake)[acct] += stake
+
+    payouts: dict[str, int] = {}
+    for acct in accounts:
+        pay = (long_payout * long_stake[acct]) // long_pool
+        pay += (short_payout * short_stake[acct]) // short_pool
+        payouts[acct] = pay
+
+    dust = distributable - sum(payouts.values())
+    return ScalarSettlement(cv, lower, upper, long_pool, short_pool, fee,
+                            long_payout, short_payout, payouts, dust, void=False)
 
 
 # --------------------------------------------------------------------------- #

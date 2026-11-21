@@ -9,7 +9,14 @@ import unittest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from pipeline import FEE_BPS, run_pipeline, settle  # noqa: E402
+from pipeline import (  # noqa: E402
+    FEE_BPS,
+    SCALAR_DEMO_BAND,
+    SCALAR_DEMO_POSITIONS,
+    run_pipeline,
+    scalar_settle,
+    settle,
+)
 
 
 class TestSettlement(unittest.TestCase):
@@ -43,6 +50,68 @@ class TestSettlement(unittest.TestCase):
         s = settle([("l", "NO", 500)], outcome_yes=True)
         self.assertEqual(s.payouts, {})
         self.assertEqual(s.total_paid, 0)
+
+
+class TestScalarSettlement(unittest.TestCase):
+    """scalar_settle() must reproduce ScalarMarketEngine._payoutPools + claim."""
+
+    def test_matches_hand_computed_contract_math(self):
+        lower, upper = SCALAR_DEMO_BAND  # [100, 200]
+        s = scalar_settle(SCALAR_DEMO_POSITIONS, 150, lower, upper)
+        # pot 1800, fee 2% = 36, distributable 1764, f = 50/100 = 0.5
+        self.assertEqual(s.fee, (1800 * FEE_BPS) // 10_000)   # 36
+        self.assertEqual(s.long_payout, (1764 * 50) // 100)   # 882
+        self.assertEqual(s.short_payout, 1764 - 882)          # 882
+        # each account's pro-rata share of its side (floor division, as Solidity)
+        self.assertEqual(s.payouts["0xAlice"], (882 * 600) // 1000)  # 529
+        self.assertEqual(s.payouts["0xBob"], (882 * 400) // 1000)    # 352
+        self.assertEqual(s.payouts["0xCarol"], (882 * 500) // 800)   # 551
+        self.assertEqual(s.payouts["0xDave"], (882 * 300) // 800)    # 330
+        self.assertFalse(s.void)
+
+    def test_clamp_above_band_pays_long_only(self):
+        lower, upper = SCALAR_DEMO_BAND
+        s = scalar_settle(SCALAR_DEMO_POSITIONS, 999, lower, upper)
+        self.assertEqual(s.settled_value, upper)   # clamped to 200
+        self.assertEqual(s.short_payout, 0)
+        self.assertEqual(s.payouts["0xCarol"], 0)
+        self.assertEqual(s.payouts["0xDave"], 0)
+        self.assertGreater(s.payouts["0xAlice"], 0)
+
+    def test_clamp_below_band_pays_short_only(self):
+        lower, upper = SCALAR_DEMO_BAND
+        s = scalar_settle(SCALAR_DEMO_POSITIONS, 1, lower, upper)
+        self.assertEqual(s.settled_value, lower)   # clamped to 100
+        self.assertEqual(s.long_payout, 0)
+        self.assertEqual(s.payouts["0xAlice"], 0)
+        self.assertGreater(s.payouts["0xCarol"], 0)
+
+    def test_one_sided_book_voids_and_refunds_principal(self):
+        s = scalar_settle([("a", "LONG", 600), ("b", "LONG", 400)], 150, 100, 200)
+        self.assertTrue(s.void)
+        self.assertEqual(s.fee, 0)
+        self.assertEqual(s.payouts, {"a": 600, "b": 400})
+
+    def test_value_is_conserved_including_dust(self):
+        # For any book and any settlement value: paid + fee + dust == staked,
+        # dust non-negative (floor-division remainder retained in the contract).
+        for lp, sp in [(1, 999), (1000, 1), (333, 667), (10_000, 7), (7, 10_000)]:
+            for v in (100, 125, 150, 175, 200):
+                s = scalar_settle([("l1", "LONG", lp // 2), ("l2", "LONG", lp - lp // 2),
+                                   ("s1", "SHORT", sp)], v, 100, 200)
+                self.assertEqual(s.total_paid + s.fee + s.dust, s.total_staked,
+                                 msg=f"long={lp} short={sp} v={v}")
+                self.assertGreaterEqual(s.dust, 0)
+
+    def test_long_payout_is_monotone_in_value(self):
+        # A higher settlement value never pays the LONG side less (the contract's
+        # monotonicity property, mirrored by the port).
+        lower, upper = SCALAR_DEMO_BAND
+        last = -1
+        for v in range(lower, upper + 1, 5):
+            s = scalar_settle(SCALAR_DEMO_POSITIONS, v, lower, upper)
+            self.assertGreaterEqual(s.long_payout, last)
+            last = s.long_payout
 
 
 class TestPipelineBoundaries(unittest.TestCase):

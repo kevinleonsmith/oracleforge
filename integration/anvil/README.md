@@ -13,9 +13,17 @@ deploy → createMarket → takePosition ×N → advance time → resolve → cl
 equal the Python `settle()` port to the wei**, for the same scenario
 (`pipeline.DEMO_POSITIONS`). If the port ever drifts from the contract, this fails.
 
+The same treatment covers the **scalar** engine (`scalar_devnet.py`): it deploys
+the real `ScalarMarketEngine` + `MockScalarOracle`, runs the LONG/SHORT lifecycle,
+and asserts the on-chain payouts equal the `scalar_settle()` port across three
+scenarios — a value inside the band (both sides paid), a clamped value (LONG takes
+all, SHORT claims 0 without reverting), and a one-sided **void** (principals
+refunded).
+
 ```bash
-npm run devnet        # run it as a demo (prints on-chain vs port, side by side)
-npm run test:devnet   # run it as assertions (YES and NO outcomes)
+npm run devnet          # binary demo (prints on-chain vs port, side by side)
+npm run devnet:scalar   # scalar demo (mid-band / clamp / void scenarios)
+npm run test:devnet     # all parity assertions (binary YES/NO + scalar ×3)
 ```
 
 ```
@@ -28,14 +36,16 @@ npm run test:devnet   # run it as assertions (YES and NO outcomes)
 
 ## How it stays honest
 
-- **Real contracts, real node.** `MarketEngine`, `Treasury`, `MockERC20` and a
-  settable `MockOracleAdapter` are deployed with `forge create` to a live anvil;
-  positions, resolution and claims are real transactions read back from event
-  logs. The only shortcut is the oracle outcome (set directly, so the harness
-  controls YES/NO — the Chainlink-fed path is covered by the Foundry tests).
-- **One scenario, two engines.** The positions come from `pipeline.DEMO_POSITIONS`,
-  so the devnet and the pure pipeline settle the identical trades; the test
-  asserts the Solidity result matches `settle(...)`.
+- **Real contracts, real node.** For binary, `MarketEngine`, `Treasury`,
+  `MockERC20` and a settable `MockOracleAdapter`; for scalar, `ScalarMarketEngine`
+  and `MockScalarOracle` — all deployed with `forge create` to a live anvil.
+  Positions, resolution and claims are real transactions read back from event
+  logs. The only shortcut is the oracle value (set directly, so the harness
+  controls the outcome — the Chainlink-fed paths are covered by the Foundry tests).
+- **One scenario per engine, two sides checked.** The binary positions come from
+  `pipeline.DEMO_POSITIONS` and the scalar ones from `SCALAR_DEMO_POSITIONS`, so
+  the devnet and the port settle the identical books; each test asserts the
+  Solidity result matches its Python port (`settle` / `scalar_settle`) to the wei.
 - **Ephemeral + self-cleaning.** Each run picks a random port and tears the node
   down in a `finally`, so repeated or parallel runs never collide.
 

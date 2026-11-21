@@ -131,5 +131,13 @@ clamps and compares the adapter's rescaled value against `lower`/`upper` directl
   settlement value**, and a **live LONG/SHORT payout preview** as you drag a
   hypothetical settlement point. The payout math (`lib/scalar.ts`) mirrors the
   contract and is unit-tested (6 tests).
+- **Devnet parity:** `integration/anvil/scalar_devnet.py` boots a real anvil node,
+  deploys the actual `ScalarMarketEngine` + `MockScalarOracle`, runs the full
+  LONG/SHORT lifecycle on-chain, and asserts the payouts equal a Python port
+  (`pipeline.scalar_settle`) **to the wei** — across a mid-band settle, a clamped
+  value (SHORT claims 0 without reverting), and a one-sided void. So scalar
+  settlement is no longer trusted through a port alone; it is checked against the
+  contract it mirrors, in CI (`npm run test:devnet`), exactly as the binary engine is.
 
-Scalar markets are now at parity with binary across contract → oracle → worker → UI.
+Scalar markets are now at parity with binary across contract → oracle → worker →
+UI, and the settlement math is proven on-chain, not just in the port and fuzz tests.

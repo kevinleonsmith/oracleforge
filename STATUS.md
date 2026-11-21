@@ -3,7 +3,7 @@
 _Last updated: 2026-11-20_
 
 MVP of an autonomous AI prediction-market protocol on Gnosis Chain. **11 packages,
-273 passing tests** (incl. parimutuel settlement fuzzed for its invariants,
+279 passing tests** (incl. parimutuel settlement fuzzed for its invariants,
 stateful solvency proven across randomly-interleaved market histories, and a
 cross-package end-to-end that threads one market through every worker). Every
 off-chain worker, pure-logic layer, smart contract, and
@@ -27,7 +27,7 @@ Akash embeddings ─▶ Cartesi deterministic forecast ─▶ relayer createMark
 - **Run every test:** `npm test` (contracts via Foundry, the rest via Python `unittest` / `node --test`)
 - **Run the pipeline dry (no chain/network):** `npm run ai`, `npm run relay`, `npm run resolve`, `npm run archive`, `npm run lit`, `npm run inference`
 - **Run the whole thing end to end:** `npm run e2e` (generate → relay → trade → resolve → archive, with boundary checks)
-- **Prove settlement on a real node:** `npm run devnet` (boots anvil, deploys the actual contracts, checks on-chain payouts == the Python port)
+- **Prove settlement on a real node:** `npm run devnet` (binary) / `npm run devnet:scalar` (scalar) — boots anvil, deploys the actual contracts, checks on-chain payouts == the Python port
 
 ## Packages
 
@@ -43,8 +43,8 @@ Akash embeddings ─▶ Cartesi deterministic forecast ─▶ relayer createMark
 | `lit` | token-gated / encrypted private markets (Lit Protocol) | TypeScript | **14** | `npm run lit` |
 | `frontend` | Next.js terminal UI; live Tableland + viem reads, switchable with mock; **optimistic-resolution panel** (live challenge countdown, dispute/finalize); **scalar-market panel** (band, implied value, live LONG/SHORT payout) | TypeScript | **26** | `npm run dev` |
 | `shared` | Tableland SQL schema + shared TypeScript types | SQL + TS | — | — |
-| `integration` | end-to-end thread across every worker + contract-exact settlement; **anvil devnet** parity vs the real `MarketEngine` | Python + Foundry | **8** (+2 devnet) | `npm run e2e` · `npm run devnet` |
-| | | | **273** | `npm test` |
+| `integration` | end-to-end thread across every worker + contract-exact settlement (binary + scalar ports); **anvil devnet** parity vs the real `MarketEngine` **and `ScalarMarketEngine`** | Python + Foundry | **14** (+5 devnet) | `npm run e2e` · `npm run devnet` · `npm run devnet:scalar` |
+| | | | **279** | `npm test` |
 
 ## The determinism boundary (the key design decision)
 
@@ -142,7 +142,9 @@ A proof of this runs in CI: the relayer and inference tests assert the committed
 - An **anvil devnet** (`integration/anvil/`) that removes that port from the trust
   path: it boots a real node, deploys the **actual** Solidity, runs the full
   on-chain lifecycle (create → position → resolve → claim) via `cast`, and asserts
-  the real `MarketEngine` payouts and fee equal the Python `settle()` to the wei.
+  the real `MarketEngine` payouts and fee equal the Python `settle()` to the wei —
+  and the same for the **`ScalarMarketEngine`** (`scalar_devnet.py`, checked against
+  `scalar_settle()` across mid-band, clamped, and one-sided-void scenarios).
 
 **Coded behind interfaces, NOT exercised** (needs infrastructure/credentials):
 
@@ -166,9 +168,9 @@ every PR, as three jobs:
 
 | Check | What it does |
 |-------|--------------|
-| `all tests` | Node 22 + Python 3.11 + Foundry + PyYAML, runs `npm test` (all 273 tests) |
+| `all tests` | Node 22 + Python 3.11 + Foundry + PyYAML, runs `npm test` (all 279 tests) |
 | `frontend build` | `npm install` + `next build` in `packages/frontend` — compiles the TSX and type-checks the whole app (the one thing the stdlib test suite can't cover) |
-| `anvil devnet parity` | boots a real anvil node, deploys the actual contracts, and asserts on-chain parimutuel payouts equal the Python `settle()` port (`npm run test:devnet`) |
+| `anvil devnet parity` | boots a real anvil node, deploys the actual contracts, and asserts on-chain payouts equal the Python ports — binary `MarketEngine` vs `settle()` and `ScalarMarketEngine` vs `scalar_settle()` (`npm run test:devnet`) |
 
 Current status (all checks, live):
 [![CI](https://github.com/kevinleonsmith/oracleforge/actions/workflows/ci.yml/badge.svg)](https://github.com/kevinleonsmith/oracleforge/actions/workflows/ci.yml)

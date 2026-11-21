@@ -70,8 +70,10 @@ jobs:
         with:
           python-version: "3.11"
       # anvil + forge + cast — boots a real node, deploys the actual contracts,
-      # and asserts on-chain parimutuel payouts equal the Python settle() port.
+      # and asserts on-chain payouts equal the Python ports: the binary
+      # MarketEngine against settle(), and the ScalarMarketEngine against
+      # scalar_settle() across mid-band / clamp / one-sided-void scenarios.
       - name: Set up Foundry
         uses: foundry-rs/foundry-toolchain@v1
-      - name: Devnet settlement parity
+      - name: Devnet settlement parity (binary + scalar engines)
         run: npm run test:devnet
