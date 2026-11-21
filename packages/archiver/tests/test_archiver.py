@@ -93,6 +93,14 @@ class OracleReportSinkTests(unittest.TestCase):
         a = artifact_from_oracle_report({"market_id": "0x1", "outcome": 0, "resolved_at": 5})
         self.assertEqual(a.kind, ArtifactKind.ORACLE_REPORT)
         self.assertEqual(a.payload["outcome"], 0)
+        self.assertEqual(a.payload["market_type"], "binary")  # defaults when absent
+
+    def test_report_carries_market_type(self):
+        # a categorical settlement's evidence bundle is self-describing: outcome 0
+        # is the winning index, not a binary NO, and market_type says so.
+        a = artifact_from_oracle_report(
+            {"market_id": "0x1", "outcome": 0, "resolved_at": 5, "kind": "categorical"})
+        self.assertEqual(a.payload["market_type"], "categorical")
 
 
 if __name__ == "__main__":

@@ -40,6 +40,29 @@ class OracleReportRowTests(unittest.TestCase):
         self.assertEqual(row.answer, "4200")
         self.assertEqual(row.outcome, 0)
 
+    def test_market_type_is_persisted_per_kind(self):
+        # the report's kind lands in the self-describing market_type column
+        for kind in ("binary", "scalar", "categorical"):
+            row = OracleReportRow.from_report(_binary_report(kind=kind))
+            self.assertEqual(row.market_type, kind)
+            self.assertIn(f"'{kind}'", row.sql())
+
+    def test_market_type_disambiguates_outcome_zero(self):
+        # outcome=0 means NO for binary but "outcome 0 won" for categorical; the
+        # market_type column is the only thing that tells them apart.
+        binary0 = OracleReportRow.from_report(_binary_report(kind="binary", outcome=0))
+        cat0 = OracleReportRow.from_report(
+            _binary_report(kind="categorical", outcome=0, answer=None, feed="FUNCTIONS/ELECTION"))
+        self.assertEqual(binary0.outcome, cat0.outcome)        # same raw outcome
+        self.assertNotEqual(binary0.market_type, cat0.market_type)  # disambiguated
+        self.assertIn("'binary'", binary0.sql())
+        self.assertIn("'categorical'", cat0.sql())
+
+    def test_market_type_defaults_to_binary(self):
+        # a row built directly (not from a report) keeps the back-compatible default
+        row = OracleReportRow(market_id="0x1", feed="f", answer="1", outcome=1, reported_at=0)
+        self.assertEqual(row.market_type, "binary")
+
     def test_none_answer_becomes_empty_string_not_null(self):
         # oracle_reports.answer is NOT NULL — a missing answer must still be a value
         row = OracleReportRow.from_report(_binary_report(answer=None))
@@ -55,8 +78,9 @@ class OracleReportRowTests(unittest.TestCase):
         self.assertTrue(sql.startswith("INSERT INTO oracle_reports ("))
         self.assertTrue(sql.endswith(");"))
         # column order and the defaulted creation-time columns
-        self.assertIn("market_id, feed, answer, comparator, threshold, outcome, reported_at", sql)
+        self.assertIn("market_id, market_type, feed, answer, comparator, threshold, outcome, reported_at", sql)
         self.assertIn("'0xabc'", sql)
+        self.assertIn("'binary'", sql)            # self-describing market_type
         self.assertIn("'EUR/USD'", sql)
         self.assertIn("'110000000'", sql)
         self.assertIn("0, ''", sql)               # comparator default 0, threshold default ''

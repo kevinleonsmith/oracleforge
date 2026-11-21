@@ -71,11 +71,12 @@ CREATE INDEX idx_pos_account ON positions (account);
 CREATE TABLE oracle_reports (
     id          INTEGER PRIMARY KEY,
     market_id   TEXT NOT NULL,
+    market_type TEXT NOT NULL DEFAULT 'binary', -- binary | scalar | categorical
     feed        TEXT NOT NULL,               -- EUR/USD, ECON/CPI, FUNCTIONS/NOAA ...
-    answer      TEXT NOT NULL,
+    answer      TEXT NOT NULL,               -- raw oracle answer; the settled value for scalar
     comparator  INTEGER NOT NULL,            -- 0 >=  | 1 <=
     threshold   TEXT NOT NULL,
-    outcome     INTEGER NOT NULL,            -- 1=YES 0=NO
+    outcome     INTEGER NOT NULL,            -- binary 1=YES 0=NO; categorical winning index; -1 void
     round_id    TEXT,
     reported_at INTEGER NOT NULL,
     arweave_tx  TEXT

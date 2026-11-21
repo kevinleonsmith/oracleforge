@@ -69,9 +69,13 @@ class OracleReport:
     """Archival record of a settlement (destined for Tableland + Arweave)."""
 
     market_id: str
-    outcome: int            # binary: 1=YES 0=NO ; -1 for invalid/voided (scalar: unused, 0)
+    # outcome semantics depend on kind:
+    #   binary      -> 1=YES 0=NO ; -1 invalid/voided
+    #   scalar      -> unused (0); the settled value is carried in `answer`
+    #   categorical -> winning outcome index ; -1 invalid/voided
+    outcome: int
     resolved_at: int
     feed: str = ""
     tx_hash: str = ""
     answer: Optional[int] = None  # raw oracle answer; the settled value for scalar markets
-    kind: str = "binary"    # "binary" | "scalar"
+    kind: str = "binary"    # "binary" | "scalar" | "categorical"

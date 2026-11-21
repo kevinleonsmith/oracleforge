@@ -59,11 +59,15 @@ class OracleReportRow:
     """One ``oracle_reports`` row built from an ``OracleReport``.
 
     The resolver supplies the *resolution-evidence* columns it actually
-    observes — ``market_id``, ``feed``, ``answer`` (the raw oracle answer, or the
+    observes — ``market_id``, ``market_type`` (binary/scalar/categorical, so the
+    row is self-describing), ``feed``, ``answer`` (the raw oracle answer, or the
     settled value for a scalar market), ``outcome`` and ``reported_at``. The
-    ``comparator``/``threshold`` columns are *creation-time* market parameters the
-    resolver does not carry at settlement, so they default (``0`` / ``''``); the
-    row that owns them is written at ``createMarket`` time by the indexer.
+    ``market_type`` matters because ``outcome`` is ambiguous without it: ``0`` is
+    NO for a binary market, the (unused) scalar default, and the *winning index*
+    for a categorical one — a consumer can only tell which from ``market_type``.
+    The ``comparator``/``threshold`` columns are *creation-time* market parameters
+    the resolver does not carry at settlement, so they default (``0`` / ``''``);
+    the row that owns them is written at ``createMarket`` time by the indexer.
     ``arweave_tx`` is left unset — the archiver back-fills it once the evidence
     bundle is stored (``UPDATE ... SET arweave_tx``). ``id`` is omitted so
     Tableland/SQLite auto-assigns the primary key.
@@ -74,6 +78,7 @@ class OracleReportRow:
     answer: str
     outcome: int
     reported_at: int
+    market_type: str = "binary"
     comparator: int = 0
     threshold: str = ""
     round_id: Optional[str] = None
@@ -86,14 +91,15 @@ class OracleReportRow:
             answer="" if r.answer is None else str(r.answer),
             outcome=r.outcome,
             reported_at=r.resolved_at,
+            market_type=r.kind,
             round_id=(r.tx_hash or None),
         )
 
     def sql(self, table: str = DEFAULT_REPORTS_TABLE) -> str:
-        cols = ["market_id", "feed", "answer", "comparator", "threshold",
-                "outcome", "reported_at"]
-        vals = [_q(self.market_id), _q(self.feed), _q(self.answer),
-                str(self.comparator), _q(self.threshold),
+        cols = ["market_id", "market_type", "feed", "answer", "comparator",
+                "threshold", "outcome", "reported_at"]
+        vals = [_q(self.market_id), _q(self.market_type), _q(self.feed),
+                _q(self.answer), str(self.comparator), _q(self.threshold),
                 str(self.outcome), str(self.reported_at)]
         if self.round_id is not None:
             cols.append("round_id")

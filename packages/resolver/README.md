@@ -101,6 +101,9 @@ schema) and is identical whether a dry-run logs it (`LogTablelandMutator`, what
 (`RegistryTablelandMutator`). So the whole write-back — mapping, column order, SQL,
 escaping — is exercised and tested; the only unexercised seam is the signed
 registry mutation (needs a writer key + RPC). The resolver fills the
-resolution-evidence columns (`market_id`, `feed`, `answer`/settled value, `outcome`,
-`reported_at`); the archival worker later back-fills `oracle_reports.arweave_tx`
-with the Arweave evidence bundle.
+resolution-evidence columns (`market_id`, `market_type`, `feed`, `answer`/settled
+value, `outcome`, `reported_at`). The `market_type` (binary/scalar/categorical) makes
+each row self-describing: `outcome = 0` is NO for a binary market but *outcome 0 won*
+for a categorical one, so without it the index is ambiguous. The archival worker later
+back-fills `oracle_reports.arweave_tx` with the Arweave evidence bundle (which carries
+`market_type` too).

@@ -80,6 +80,7 @@ def artifact_from_oracle_report(report: Any) -> Artifact:
     mid = str(_field(report, "market_id"))
     payload = {
         "market_id": mid,
+        "market_type": _field(report, "kind", "binary"),  # self-describing evidence
         "outcome": _field(report, "outcome"),
         "resolved_at": _field(report, "resolved_at"),
         "feed": _field(report, "feed", ""),

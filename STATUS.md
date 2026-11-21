@@ -3,7 +3,7 @@
 _Last updated: 2026-11-20_
 
 MVP of an autonomous AI prediction-market protocol on Gnosis Chain. **11 packages,
-411 passing tests** (incl. parimutuel settlement fuzzed for its invariants,
+415 passing tests** (incl. parimutuel settlement fuzzed for its invariants,
 stateful solvency proven across randomly-interleaved market histories, and a
 cross-package end-to-end that threads one market through every worker). Every
 off-chain worker, pure-logic layer, smart contract, and
@@ -37,14 +37,14 @@ Akash embeddings ─▶ Cartesi deterministic forecast ─▶ relayer createMark
 | `ai-market-generator` | signals → cluster → confidence → deterministic forecast → proposal | Python | **9** | `npm run ai` |
 | `cartesi` | deterministic forecast packaged as a Cartesi Rollups machine (commits notices) | Python + Docker | **9** | `npm run test:cartesi` |
 | `relayer` | Cartesi notices → `createMarket` on Gnosis (keccak + ABI encoding); **validated write path**, **creates binary, scalar and categorical markets** | Python | **46** | `npm run relay` |
-| `resolver` | resolution watcher — proposes `resolve()`, waits out the dispute window, `finalize()`s, archives outcomes; **drives binary, scalar and categorical engines** (`Watcher` / `ScalarWatcher` / `CategoricalWatcher`); **`oracle_reports` write-back** (built, escaped SQL through a signed-mutation seam) | Python | **67** | `npm run resolve` |
-| `archiver` | Arweave permanent storage + Tableland `arweave_tx` write-back | Python | **12** | `npm run archive` |
+| `resolver` | resolution watcher — proposes `resolve()`, waits out the dispute window, `finalize()`s, archives outcomes; **drives binary, scalar and categorical engines** (`Watcher` / `ScalarWatcher` / `CategoricalWatcher`); **`oracle_reports` write-back** (built, escaped SQL through a signed-mutation seam; now carries a self-describing `market_type` column so a settlement's `outcome` is unambiguous across binary/scalar/categorical) | Python | **70** | `npm run resolve` |
+| `archiver` | Arweave permanent storage + Tableland `arweave_tx` write-back | Python | **13** | `npm run archive` |
 | `inference` | Akash GPU service (embeddings + drafting) + SDL; `RemoteEmbedder` | Python + Docker | **18** | `npm run inference` |
 | `lit` | token-gated / encrypted private markets (Lit Protocol) | TypeScript | **14** | `npm run lit` |
 | `frontend` | Next.js terminal UI; live Tableland + viem reads, switchable with mock; **optimistic-resolution panel** (live challenge countdown, dispute/finalize); **scalar-market panel** (band, implied value, live LONG/SHORT payout); **categorical-market panel** (per-outcome implied probabilities, winner-take-all payout preview); **all three market types flow through the mock/chain facade** (scalar + categorical pools hydrated from their engines, pure decoders unit-tested) | TypeScript | **39** | `npm run dev` |
 | `shared` | Tableland SQL schema + shared TypeScript types | SQL + TS | — | — |
 | `integration` | end-to-end thread across every worker + contract-exact settlement (binary + scalar + categorical ports); **anvil devnet** parity vs the real `MarketEngine`, `ScalarMarketEngine` **and `CategoricalMarketEngine`** | Python + Foundry | **18** (+8 devnet) | `npm run e2e` · `npm run devnet*` |
-| | | | **411** | `npm test` |
+| | | | **415** | `npm test` |
 
 ## The determinism boundary (the key design decision)
 
@@ -218,7 +218,7 @@ every PR, as three jobs:
 
 | Check | What it does |
 |-------|--------------|
-| `all tests` | Node 22 + Python 3.11 + Foundry + PyYAML, runs `npm test` (all 411 tests) |
+| `all tests` | Node 22 + Python 3.11 + Foundry + PyYAML, runs `npm test` (all 415 tests) |
 | `frontend build` | `npm install` + `next build` in `packages/frontend` — compiles the TSX and type-checks the whole app (the one thing the stdlib test suite can't cover) |
 | `anvil devnet parity` | boots a real anvil node, deploys the actual contracts, and asserts on-chain payouts equal the Python ports — binary `MarketEngine` vs `settle()`, `ScalarMarketEngine` vs `scalar_settle()`, and `CategoricalMarketEngine` vs `categorical_settle()` (`npm run test:devnet`) |
 
