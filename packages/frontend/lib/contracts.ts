@@ -3,6 +3,16 @@
 import { createPublicClient, http, type Address } from "viem";
 import { gnosis, gnosisChiado } from "viem/chains";
 import { getDeployment, isDeployed } from "./addresses";
+import {
+  STATUS,
+  decodeScalarMarket, decodeCategoricalMarket,
+  type OnchainScalarMarket, type OnchainCategoricalMarket,
+} from "./marketDecode";
+
+export {
+  decodeScalarMarket, decodeCategoricalMarket,
+  type OnchainScalarMarket, type OnchainCategoricalMarket,
+} from "./marketDecode";
 
 export const CHAIN = process.env.NEXT_PUBLIC_CHAIN === "gnosis" ? gnosis : gnosisChiado;
 export const deployment = getDeployment(CHAIN.id);
@@ -58,8 +68,6 @@ export const marketEngineAbi = [
   { type: "function", name: "finalize", stateMutability: "nonpayable", inputs: [{ name: "marketId", type: "bytes32" }], outputs: [] },
 ] as const;
 
-const STATUS = ["OPEN", "CLOSED", "RESOLVED", "INVALID"] as const;
-
 export interface OnchainMarket {
   status: (typeof STATUS)[number];
   aiProbBps: number;
@@ -91,6 +99,85 @@ export async function readMarketOnchain(marketId: `0x${string}`): Promise<Onchai
     };
   } catch {
     return null; // RPC hiccup -> caller keeps the indexed row
+  }
+}
+
+// --- scalar (range) engine --------------------------------------------------
+
+export const scalarMarketEngineAbi = [
+  {
+    type: "function", name: "getMarket", stateMutability: "view",
+    inputs: [{ name: "marketId", type: "bytes32" }],
+    outputs: [{
+      name: "", type: "tuple",
+      components: [
+        { name: "questionHash", type: "bytes32" },
+        { name: "createdAt", type: "uint64" },
+        { name: "closeAt", type: "uint64" },
+        { name: "lower", type: "int256" },
+        { name: "upper", type: "int256" },
+        { name: "feeBps", type: "uint16" },
+        { name: "status", type: "uint8" },
+        { name: "settledValue", type: "int256" },
+        { name: "longPool", type: "uint256" },
+        { name: "shortPool", type: "uint256" },
+      ],
+    }],
+  },
+] as const;
+
+/** Live read of a single scalar market's state. Null off-chain or on an RPC hiccup. */
+export async function readScalarMarketOnchain(marketId: `0x${string}`): Promise<OnchainScalarMarket | null> {
+  if (!deployed) return null;
+  try {
+    const m = await publicClient.readContract({
+      address: deployment.contracts.ScalarMarketEngine as Address,
+      abi: scalarMarketEngineAbi,
+      functionName: "getMarket",
+      args: [marketId],
+    });
+    return decodeScalarMarket(m);
+  } catch {
+    return null;
+  }
+}
+
+// --- categorical (N-outcome) engine -----------------------------------------
+
+export const categoricalMarketEngineAbi = [
+  {
+    type: "function", name: "getMarket", stateMutability: "view",
+    inputs: [{ name: "marketId", type: "bytes32" }],
+    outputs: [{
+      name: "", type: "tuple",
+      components: [
+        { name: "questionHash", type: "bytes32" },
+        { name: "createdAt", type: "uint64" },
+        { name: "closeAt", type: "uint64" },
+        { name: "outcomeCount", type: "uint8" },
+        { name: "feeBps", type: "uint16" },
+        { name: "status", type: "uint8" },
+        { name: "winningOutcome", type: "uint8" },
+        { name: "losingPoolNet", type: "uint256" },
+        { name: "pools", type: "uint256[]" },
+      ],
+    }],
+  },
+] as const;
+
+/** Live read of a single categorical market's state. Null off-chain or on a hiccup. */
+export async function readCategoricalMarketOnchain(marketId: `0x${string}`): Promise<OnchainCategoricalMarket | null> {
+  if (!deployed) return null;
+  try {
+    const m = await publicClient.readContract({
+      address: deployment.contracts.CategoricalMarketEngine as Address,
+      abi: categoricalMarketEngineAbi,
+      functionName: "getMarket",
+      args: [marketId],
+    });
+    return decodeCategoricalMarket(m);
+  } catch {
+    return null;
   }
 }
 

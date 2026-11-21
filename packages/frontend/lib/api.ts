@@ -16,3 +16,5 @@ export const getOpenMarkets = impl.getOpenMarkets;
 export const getPrediction = impl.getPrediction;
 export const getActiveProposals = impl.getActiveProposals;
 export const getProtocolStats = impl.getProtocolStats;
+export const getScalarMarkets = impl.getScalarMarkets;
+export const getCategoricalMarkets = impl.getCategoricalMarkets;

@@ -1,5 +1,7 @@
 // Mock data client — the design-time data set. Same signatures as chainApi.ts.
 import type { Market, Prediction, GovernanceProposal } from "@oracleforge/shared/types";
+import type { ScalarMarketData } from "@/components/ScalarMarketCard";
+import type { CategoricalMarketData } from "@/components/CategoricalMarketCard";
 
 const MOCK_MARKETS: Market[] = [
   {
@@ -41,6 +43,46 @@ const MOCK_PROPOSALS: GovernanceProposal[] = [
   },
 ];
 
+// Sample scalar (range) + categorical (N-outcome) markets. Static defs — the
+// single source for the panels, served here and (in chain mode) hydrated with live
+// pools by chainApi. The band/labels come from market creation, not a per-read.
+const MOCK_SCALAR_MARKETS: ScalarMarketData[] = [
+  { id: "MKT-0xE71", category: "CRYPTO", question: "Where will ETH close at the end of the quarter?", feed: "ETH/USD", lower: 3000, upper: 5000, unit: "$", longPool: 620, shortPool: 380 },
+  { id: "MKT-0xC90", category: "MACRO", question: "US CPI year-over-year for the reference month?", feed: "ECON/CPI", lower: 2, upper: 5, unit: "%", longPool: 300, shortPool: 500 },
+  { id: "MKT-0xB44", category: "CRYPTO", question: "Average Gnosis gas price over the settlement window?", feed: "GAS/GWEI", lower: 0, upper: 50, unit: "", longPool: 450, shortPool: 450 },
+];
+
+const MOCK_CATEGORICAL_MARKETS: CategoricalMarketData[] = [
+  {
+    id: "MKT-0xD10", category: "GEO", feed: "FUNCTIONS/ELECTION",
+    question: "Which party wins the most seats in the general election?",
+    outcomes: [
+      { label: "Progressive", pool: 820 },
+      { label: "Conservative", pool: 640 },
+      { label: "Centrist", pool: 410 },
+      { label: "Other", pool: 130 },
+    ],
+  },
+  {
+    id: "MKT-0xD24", category: "CRYPTO", feed: "FUNCTIONS/SPORTS",
+    question: "Which club lifts the title this season?",
+    outcomes: [
+      { label: "North City", pool: 1100 },
+      { label: "Rivertown", pool: 500 },
+      { label: "Harbor United", pool: 300 },
+    ],
+  },
+  {
+    id: "MKT-0xD37", category: "MACRO", feed: "FUNCTIONS/RATES",
+    question: "What is the central bank's next rate decision?",
+    outcomes: [
+      { label: "Cut 25bps", pool: 360 },
+      { label: "Hold", pool: 900 },
+      { label: "Hike 25bps", pool: 240 },
+    ],
+  },
+];
+
 const delay = <T,>(v: T) => new Promise<T>((r) => setTimeout(() => r(v), 60));
 
 export async function getOpenMarkets(): Promise<Market[]> {
@@ -51,6 +93,12 @@ export async function getPrediction(marketId: string): Promise<Prediction | null
 }
 export async function getActiveProposals(): Promise<GovernanceProposal[]> {
   return delay(MOCK_PROPOSALS);
+}
+export async function getScalarMarkets(): Promise<ScalarMarketData[]> {
+  return delay(MOCK_SCALAR_MARKETS);
+}
+export async function getCategoricalMarkets(): Promise<CategoricalMarketData[]> {
+  return delay(MOCK_CATEGORICAL_MARKETS);
 }
 export async function getProtocolStats() {
   return delay({

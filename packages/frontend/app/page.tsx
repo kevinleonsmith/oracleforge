@@ -1,13 +1,18 @@
-import { getOpenMarkets, getProtocolStats, getActiveProposals, DATA_SOURCE } from "@/lib/api";
+import {
+  getOpenMarkets, getProtocolStats, getActiveProposals,
+  getScalarMarkets, getCategoricalMarkets, DATA_SOURCE,
+} from "@/lib/api";
 import { Terminal } from "@/components/Terminal";
 
 const SOURCE_LABEL = DATA_SOURCE === "chain" ? "Live · Chiado" : "Sample data";
 
 export default async function Home() {
-  const [markets, stats, proposals] = await Promise.all([
+  const [markets, stats, proposals, scalarMarkets, categoricalMarkets] = await Promise.all([
     getOpenMarkets(),
     getProtocolStats(),
     getActiveProposals(),
+    getScalarMarkets(),
+    getCategoricalMarkets(),
   ]);
 
   return (
@@ -27,7 +32,12 @@ export default async function Home() {
         </div>
       </section>
 
-      <Terminal markets={markets} proposals={proposals} />
+      <Terminal
+        markets={markets}
+        proposals={proposals}
+        scalarMarkets={scalarMarkets}
+        categoricalMarkets={categoricalMarkets}
+      />
 
       <p style={{ color: "var(--faint)", fontSize: 11, margin: "40px 0" }}>
         Demonstration interface. Markets, balances, trades, votes and disputes are simulated sample

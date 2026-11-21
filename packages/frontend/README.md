@@ -25,11 +25,13 @@ indexed row or an empty state — it never crashes the page.
 
 | File | Role |
 |------|------|
-| `lib/api.ts` | facade: picks mock or chain by `NEXT_PUBLIC_DATA_SOURCE` |
+| `lib/api.ts` | facade: picks mock or chain by `NEXT_PUBLIC_DATA_SOURCE`; serves binary, scalar + categorical markets |
 | `lib/queries.ts` | **pure** SQL builders + row→domain mappers + stats (unit-tested) |
 | `lib/format.ts` | **pure** bps/units/compact formatting (unit-tested) |
 | `lib/tableland.ts` | read-only gateway query |
-| `lib/contracts.ts` | viem client + ABI + `readMarketOnchain` |
+| `lib/contracts.ts` | viem client + ABIs + `readMarketOnchain` / `readScalarMarketOnchain` / `readCategoricalMarketOnchain` (all three engines) |
+| `lib/marketDecode.ts` | **pure** scalar/categorical `getMarket` tuple decoders (unit-tested) |
+| `lib/marketHydrate.ts` | **pure** merge of live pools into the scalar/categorical card defs (unit-tested) |
 | `lib/addresses.ts` | deployment address book (`deployments/*.json` + env override) |
 | `scripts/extract-addresses.mjs` | write the address book from a Foundry broadcast |
 

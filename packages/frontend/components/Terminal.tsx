@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import type { Market, GovernanceProposal } from "@oracleforge/shared/types";
 import { MarketsView } from "./MarketsView";
+import type { ScalarMarketData } from "./ScalarMarketCard";
+import type { CategoricalMarketData } from "./CategoricalMarketCard";
 import { SimulationExplorer } from "./SimulationExplorer";
 import { GovernanceView } from "./GovernanceView";
 
@@ -11,9 +13,13 @@ type View = (typeof VIEWS)[number];
 export function Terminal({
   markets,
   proposals,
+  scalarMarkets,
+  categoricalMarkets,
 }: {
   markets: Market[];
   proposals: GovernanceProposal[];
+  scalarMarkets: ScalarMarketData[];
+  categoricalMarkets: CategoricalMarketData[];
 }) {
   const [view, setView] = useState<View>("markets");
 
@@ -43,7 +49,13 @@ export function Terminal({
         ))}
       </nav>
 
-      {view === "markets" && <MarketsView initialMarkets={markets} />}
+      {view === "markets" && (
+        <MarketsView
+          initialMarkets={markets}
+          scalarMarkets={scalarMarkets}
+          categoricalMarkets={categoricalMarkets}
+        />
+      )}
       {view === "simulations" && <SimulationExplorer markets={markets} />}
       {view === "governance" && <GovernanceView proposals={proposals} />}
     </>
