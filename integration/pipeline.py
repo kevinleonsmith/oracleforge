@@ -422,6 +422,95 @@ def run_pipeline(now_ts: int = 1_737_010_000, outcome_yes: bool = True) -> Pipel
     )
 
 
+# --------------------------------------------------------------------------- #
+# Cross-engine thread — the same question, relayed through all three engines    #
+# --------------------------------------------------------------------------- #
+@dataclass
+class MultiEnginePipelineResult:
+    question: str
+    close_at: int
+    market_id: str                 # identical across the three engines
+    binary: Settlement
+    scalar: ScalarSettlement
+    categorical: CategoricalSettlement
+    index_rows: dict               # market_type -> the markets-index INSERT
+    ids_match: bool                # the three relayers derived the same market_id
+    all_conserved: bool            # every engine's settlement balances
+    types_distinct: bool           # the index rows are self-describing by type
+
+
+def _conserves(s) -> bool:
+    return s.total_paid + s.fee + s.dust == s.total_staked and s.dust >= 0
+
+
+def run_multi_engine_pipeline(now_ts: int = 1_737_010_000) -> MultiEnginePipelineResult:
+    """Relay one question through the binary, scalar and categorical engines and
+    assert the cross-engine properties: (1) the marketId derivation is identical
+    across all three engines for the same (questionHash, closeAt, chainId), so the
+    relayer's dedupe is cross-consistent; (2) each engine settles its own book with
+    value conserved; (3) the markets-index rows are self-describing by market_type
+    even though the id namespace coincides.
+    """
+    from oracleforge_relayer.feeds import FeedRegistry
+    from oracleforge_relayer.index import MarketIndexRow
+    from oracleforge_relayer.mapping import (
+        build_categorical_create_market_args,
+        build_create_market_args,
+        build_scalar_create_market_args,
+    )
+
+    reg = FeedRegistry()
+    chain_id = 10200
+    question = "Will the reference benchmark resolve in range this quarter?"
+    close_at = now_ts + 30 * 86_400
+
+    binary_args = build_create_market_args(
+        {"question": question, "category": "MACRO", "close_at": close_at,
+         "oracle": {"feed": "EUR/USD", "threshold": 110_000_000, "comparator": 0,
+                    "fallback_feed": None, "max_stale": 3600}},
+        6700, chain_id, reg, now_ts,
+    )
+    scalar_args = build_scalar_create_market_args(
+        {"question": question, "category": "MACRO", "close_at": close_at,
+         "band": {"lower": 100, "upper": 200, "unit": ""},
+         "oracle": {"feed": "ETH/USD", "target_decimals": 0, "fallback_feed": None, "max_stale": 3600}},
+        chain_id, reg, now_ts,
+    )
+    categorical_args = build_categorical_create_market_args(
+        {"question": question, "category": "SPORTS", "close_at": close_at,
+         "outcomes": ["A", "B", "C"],
+         "oracle": {"feed": "FUNCTIONS/SPORTS", "fallback_feed": None, "max_stale": 3600}},
+        chain_id, reg, now_ts,
+    )
+
+    ids = {binary_args.market_id, scalar_args.market_id, categorical_args.market_id}
+    ids_match = len(ids) == 1
+
+    binary = settle(DEMO_POSITIONS, outcome_yes=True)
+    scalar = scalar_settle(SCALAR_DEMO_POSITIONS, 150, *SCALAR_DEMO_BAND)
+    categorical = categorical_settle(
+        CATEGORICAL_DEMO_POSITIONS, 0, CATEGORICAL_DEMO_OUTCOMES)
+
+    index_rows = {
+        "binary": MarketIndexRow.from_binary(binary_args, category="MACRO", created_at=now_ts),
+        "scalar": MarketIndexRow.from_scalar(scalar_args, category="MACRO", unit="", created_at=now_ts),
+        "categorical": MarketIndexRow.from_categorical(
+            categorical_args, category="SPORTS", outcomes=["A", "B", "C"], created_at=now_ts),
+    }
+    types_distinct = (
+        {r.market_type for r in index_rows.values()} == {"binary", "scalar", "categorical"}
+        and all(r.market_id == binary_args.market_id for r in index_rows.values())
+    )
+
+    return MultiEnginePipelineResult(
+        question=question, close_at=close_at, market_id=binary_args.market_id,
+        binary=binary, scalar=scalar, categorical=categorical, index_rows=index_rows,
+        ids_match=ids_match,
+        all_conserved=_conserves(binary) and _conserves(scalar) and _conserves(categorical),
+        types_distinct=types_distinct,
+    )
+
+
 def _fmt_money(n: int) -> str:
     return f"{n:,}"
 
@@ -448,7 +537,21 @@ def main(argv=None) -> int:
         print(f"    {'✓' if ok else '✗'} {name}")
     ok = res.checks.all_pass
     print(f"\n  {'ALL CHECKS PASS' if ok else 'CHECKS FAILED'}")
-    return 0 if ok else 1
+
+    # Cross-engine thread: one question through all three engines.
+    me = run_multi_engine_pipeline()
+    print("\n  cross-engine thread (one question → binary + scalar + categorical)")
+    print(f"    market_id {me.market_id[:18]}…  identical across engines "
+          f"{'✓' if me.ids_match else '✗'}")
+    print(f"    binary {_fmt_money(me.binary.total_paid)} paid · "
+          f"scalar {_fmt_money(me.scalar.total_paid)} paid · "
+          f"categorical {_fmt_money(me.categorical.total_paid)} paid")
+    for name, flag in (("ids_match", me.ids_match), ("all_conserved", me.all_conserved),
+                       ("types_distinct", me.types_distinct)):
+        print(f"    {'✓' if flag else '✗'} {name}")
+    me_ok = me.ids_match and me.all_conserved and me.types_distinct
+    print(f"\n  {'ALL CHECKS PASS' if ok and me_ok else 'CHECKS FAILED'}")
+    return 0 if ok and me_ok else 1
 
 
 if __name__ == "__main__":

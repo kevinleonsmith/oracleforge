@@ -16,6 +16,7 @@ from pipeline import (  # noqa: E402
     SCALAR_DEMO_BAND,
     SCALAR_DEMO_POSITIONS,
     categorical_settle,
+    run_multi_engine_pipeline,
     run_pipeline,
     scalar_settle,
     settle,
@@ -194,6 +195,45 @@ class TestPipelineBoundaries(unittest.TestCase):
         self.assertEqual(res.market_id, res.report_market_id)
         s = res.settlement
         self.assertEqual(s.total_paid + s.fee + s.dust, s.total_staked)
+
+
+class TestMultiEnginePipeline(unittest.TestCase):
+    """One question relayed through all three engines — cross-engine properties."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.res = run_multi_engine_pipeline()
+
+    def test_marketId_is_identical_across_engines(self):
+        # Same (questionHash, closeAt, chainId) -> same id in every engine, so the
+        # relayer's dedupe is cross-consistent regardless of market type.
+        self.assertTrue(self.res.ids_match, "binary/scalar/categorical marketIds differ")
+
+    def test_every_engine_settles_with_value_conserved(self):
+        self.assertTrue(self.res.all_conserved)
+        # spell out each engine's conservation for a clearer failure
+        for s in (self.res.binary, self.res.scalar, self.res.categorical):
+            self.assertEqual(s.total_paid + s.fee + s.dust, s.total_staked)
+
+    def test_index_rows_are_self_describing_by_type(self):
+        # the id namespace coincides, but market_type keeps the three rows distinct
+        rows = self.res.index_rows
+        self.assertEqual(rows["binary"].market_type, "binary")
+        self.assertEqual(rows["scalar"].market_type, "scalar")
+        self.assertEqual(rows["categorical"].market_type, "categorical")
+        self.assertTrue(self.res.types_distinct)
+        self.assertEqual(rows["scalar"].market_id, rows["categorical"].market_id)
+
+    def test_each_engine_settles_a_different_shape_of_book(self):
+        # binary winners-only, scalar pays both sides, categorical winner-take-all —
+        # distinct payout structures, all conserved against the same fee model.
+        self.assertTrue(self.res.binary.outcome_yes)          # settled YES, winners only
+        self.assertFalse(self.res.scalar.void)                # mid-band: both sides paid
+        self.assertFalse(self.res.categorical.void)           # funded winner, winner-take-all
+        self.assertEqual(self.res.categorical.winning_outcome, 0)
+        # each side genuinely receives something in its own shape
+        self.assertGreater(self.res.scalar.long_payout, 0)
+        self.assertGreater(self.res.scalar.short_payout, 0)
 
 
 if __name__ == "__main__":
