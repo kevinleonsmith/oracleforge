@@ -114,7 +114,13 @@ one, or an admin can deliberately void by arbitrating an out-of-range index.
   and the production `CategoricalChainlinkAdapter` (15 tests, incl. an end-to-end
   settle through the engine).
 - **Properties:** value conservation fuzzed across a two-winner book and across a
-  variable outcome count with an arbitrary winner (2 fuzz tests, 512 runs each).
+  variable outcome count with an arbitrary winner (2 fuzz tests, 512 runs each), plus
+  **stateful solvency invariants** (`CategoricalMarketEngineInvariant.t.sol`) that drive
+  randomly-interleaved create/position/resolve/claim sequences over many N-outcome
+  markets and actors — the resolve step reaching a funded winner and all three voids
+  (no-winner, out-of-range, invalid sentinel) — and assert the engine stays solvent
+  (balance + payouts + fees == deposits) and the treasury holds exactly the fees
+  skimmed, after any history (3 invariants).
 - **Relayer:** `build_categorical_create_market_args` / `Relayer.run_categorical`
   create categorical markets on the `CategoricalMarketEngine` — an `outcomes` label
   list (or `outcome_count`, validated 2..64) plus a categorical oracle spec (just the
