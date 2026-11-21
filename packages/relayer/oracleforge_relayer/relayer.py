@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 
 from .chain import Chain
 from .feeds import FeedRegistry
+from .index import LogMarketIndexSink, MarketIndexRow, MarketIndexSink
 from .mapping import (
     SkipProposal,
     build_categorical_create_market_args,
@@ -56,11 +57,15 @@ class Relayer:
         notice_source=None,
         graphql_reader=None,
         now_ts_fn=None,
+        index_sink: Optional[MarketIndexSink] = None,
     ):
         self.chain = chain
         self.registry = registry or FeedRegistry()
         self.notice_source = notice_source or StubNoticeSource()
         self.graphql_reader = graphql_reader  # set when notice_source is graphql
+        # Collects a `markets` index row for each freshly-created market (the
+        # catalog the frontend reads). Default logs/collects; swap for a signed sink.
+        self.index_sink: MarketIndexSink = index_sink or LogMarketIndexSink()
         import time
 
         self._now = now_ts_fn or (lambda: int(time.time()))
@@ -109,6 +114,8 @@ class Relayer:
         except Exception as e:  # noqa: BLE001
             return RelayResult(q, args.market_id, "error", f"{type(e).__name__}: {e}",
                                ai_prob_bps=args.ai_prob_bps)
+        self.index_sink.record(MarketIndexRow.from_binary(
+            args, category=proposal.get("category", ""), created_at=self._now()))
         return RelayResult(q, args.market_id, "submitted", "", tx_hash=tx,
                            ai_prob_bps=args.ai_prob_bps)
 
@@ -145,6 +152,9 @@ class Relayer:
             tx = self.chain.create_scalar_market(args)  # type: ignore[attr-defined]
         except Exception as e:  # noqa: BLE001
             return RelayResult(q, args.market_id, "error", f"{type(e).__name__}: {e}")
+        self.index_sink.record(MarketIndexRow.from_scalar(
+            args, category=proposal.get("category", ""),
+            unit=(proposal.get("band") or {}).get("unit", ""), created_at=self._now()))
         return RelayResult(q, args.market_id, "submitted", "", tx_hash=tx)
 
     def run_scalar(self, proposals: List[Dict[str, Any]]) -> List[RelayResult]:
@@ -181,6 +191,9 @@ class Relayer:
             tx = self.chain.create_categorical_market(args)  # type: ignore[attr-defined]
         except Exception as e:  # noqa: BLE001
             return RelayResult(q, args.market_id, "error", f"{type(e).__name__}: {e}")
+        self.index_sink.record(MarketIndexRow.from_categorical(
+            args, category=proposal.get("category", ""),
+            outcomes=proposal.get("outcomes"), created_at=self._now()))
         return RelayResult(q, args.market_id, "submitted", "", tx_hash=tx)
 
     def run_categorical(self, proposals: List[Dict[str, Any]]) -> List[RelayResult]:

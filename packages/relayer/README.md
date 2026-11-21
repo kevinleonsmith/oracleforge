@@ -27,6 +27,13 @@ For each AI market proposal the relayer:
   `GraphQLNoticeReader` reads real notices from a running Cartesi node.
 - **`chain.py`** — `GnosisChain` (web3) submits; `DryRunChain` records without a
   network, so the whole pipeline runs locally.
+- **`index.py`** — for each freshly-created market, builds a self-describing
+  `markets` index row: `market_type` (binary/scalar/categorical) plus a JSON
+  `params` blob for the parameters with no dedicated column (the scalar band + unit,
+  the categorical outcome labels). Pure escaped SQL through a sink seam
+  (`LogMarketIndexSink` dry-run · a signed registry sink is the live swap-in), the
+  creation-time counterpart to the resolver's `oracle_reports` write-back. The
+  `markets` catalog is thus populated for all three market types, not just binary.
 
 ## Run
 

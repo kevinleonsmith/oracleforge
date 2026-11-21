@@ -14,8 +14,10 @@ CREATE TABLE markets (
     question       TEXT NOT NULL,
     question_hash  TEXT NOT NULL,            -- sha256 canonical (joins to off-chain)
     category       TEXT NOT NULL,            -- MACRO | CRYPTO | GEO | CLIMATE | ...
+    market_type    TEXT NOT NULL DEFAULT 'binary', -- binary | scalar | categorical
+    params         TEXT NOT NULL DEFAULT '{}',     -- JSON: scalar band {lower,upper,unit}; categorical {outcome_count,outcomes}
     status         TEXT NOT NULL DEFAULT 'OPEN',  -- OPEN|CLOSED|RESOLVED|INVALID
-    ai_prob_bps    INTEGER NOT NULL,         -- 0..10000 initialized YES probability
+    ai_prob_bps    INTEGER NOT NULL,         -- 0..10000 initialized YES probability (0 for scalar/categorical)
     yes_pool       TEXT NOT NULL DEFAULT '0',-- uint256 as decimal string
     no_pool        TEXT NOT NULL DEFAULT '0',
     outcome        INTEGER,                  -- 1=YES 0=NO null=unresolved
