@@ -7,8 +7,11 @@ import unittest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from oracleforge_archiver.archiver import (Archiver, artifact_from_market,  # noqa: E402
-                                           artifact_from_oracle_report)
+from oracleforge_archiver.archiver import (Archiver, artifact_from_governance,  # noqa: E402
+                                           artifact_from_market,
+                                           artifact_from_oracle_report,
+                                           artifact_from_prediction,
+                                           artifact_from_simulation)
 from oracleforge_archiver.arweave import LocalArweaveClient  # noqa: E402
 from oracleforge_archiver.canonical import content_hash  # noqa: E402
 from oracleforge_archiver.models import Artifact, ArtifactKind  # noqa: E402
@@ -101,6 +104,57 @@ class OracleReportSinkTests(unittest.TestCase):
         a = artifact_from_oracle_report(
             {"market_id": "0x1", "outcome": 0, "resolved_at": 5, "kind": "categorical"})
         self.assertEqual(a.payload["market_type"], "categorical")
+
+
+class ArtifactBuilderTests(unittest.TestCase):
+    """Each artifact kind targets the right Tableland table/row and carries its
+    payload — the archiver stores and back-fills by these fields."""
+
+    def test_market_artifact_targets_markets_row(self):
+        a = artifact_from_market(MARKET)
+        self.assertEqual(a.kind, ArtifactKind.MARKET)
+        self.assertEqual((a.table, a.id_column, a.row_id), ("markets", "market_id", "0xa7f3"))
+        self.assertEqual(a.extra_tags["Category"], "MACRO")
+
+    def test_market_artifact_falls_back_to_question_hash(self):
+        a = artifact_from_market({"question_hash": "0xqh", "category": "GEO"})
+        self.assertEqual(a.row_id, "0xqh")  # no market_id yet -> question_hash
+
+    def test_prediction_artifact_carries_the_confidence_interval(self):
+        pred = {"market_id": "0xa7f3", "model": "forge-forecast-mc",
+                "prob_yes_bps": 6700, "ci_low_bps": 6100, "ci_high_bps": 7300,
+                "samples": 50000, "input_hash": "0xih"}
+        a = artifact_from_prediction(pred)
+        self.assertEqual(a.kind, ArtifactKind.PREDICTION)
+        self.assertEqual((a.table, a.id_column, a.row_id), ("predictions", "market_id", "0xa7f3"))
+        # the permanent record carries the full forecast, CI included
+        self.assertEqual(a.payload["ci_low_bps"], 6100)
+        self.assertEqual(a.payload["ci_high_bps"], 7300)
+        self.assertEqual(a.extra_tags["Model"], "forge-forecast-mc")
+
+    def test_governance_artifact_targets_proposal_row(self):
+        a = artifact_from_governance({"proposal_id": "OFP-47", "title": "fund reserve"})
+        self.assertEqual(a.kind, ArtifactKind.GOVERNANCE)
+        self.assertEqual((a.table, a.id_column, a.row_id), ("governance_proposals", "proposal_id", "OFP-47"))
+        self.assertEqual(a.extra_tags["Proposal-Id"], "OFP-47")
+
+    def test_simulation_artifact_targets_simulation_row(self):
+        a = artifact_from_simulation({"id": "sim-9", "market_id": "0xa7f3", "kind": "montecarlo"})
+        self.assertEqual(a.kind, ArtifactKind.SIMULATION)
+        self.assertEqual((a.table, a.id_column, a.row_id), ("simulations", "id", "sim-9"))
+
+    def test_each_kind_is_content_addressed_independently(self):
+        # same logical id, different payloads/kinds -> distinct content hashes, so
+        # archiving one never dedupes against another.
+        tmp = tempfile.mkdtemp(prefix="arw-kinds-")
+        archiver = Archiver(LocalArweaveClient(tmp), LogTablelandWriter(), now_fn=lambda: 1)
+        r_market = archiver.archive(artifact_from_market(MARKET))
+        r_pred = archiver.archive(artifact_from_prediction(
+            {"market_id": "0xa7f3", "model": "m", "prob_yes_bps": 1, "ci_low_bps": 0,
+             "ci_high_bps": 2, "samples": 1, "input_hash": "0x"}))
+        self.assertFalse(r_market.deduped)
+        self.assertFalse(r_pred.deduped)
+        self.assertNotEqual(r_market.content_hash, r_pred.content_hash)
 
 
 if __name__ == "__main__":
