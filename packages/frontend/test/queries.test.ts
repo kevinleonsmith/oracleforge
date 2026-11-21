@@ -12,6 +12,7 @@ import {
   mapScalarMarketRow,
   mapCategoricalMarketRow,
   computeStats,
+  computeProtocolStats,
 } from "../lib/queries.ts";
 import { bpsToPercent, formatUnits, formatCompact, impliedYesPercent, payoutPreview } from "../lib/format.ts";
 
@@ -115,6 +116,37 @@ test("computeStats sums pools (18-decimals) and averages prob", () => {
 
 test("computeStats handles empty", () => {
   assert.deepEqual(computeStats([], 18), { activeMarkets: 0, tvlTokens: 0, avgProbBps: 0 });
+});
+
+test("computeProtocolStats aggregates TVL + count across all three market types", () => {
+  const one = "1000000000000000000"; // 1 token, 18 decimals
+  const binary = [
+    mapMarketRow({ market_id: "b", yes_pool: one, no_pool: one, ai_prob_bps: 6000, status: "OPEN" }),
+  ];
+  const scalar = [
+    mapScalarMarketRow({ market_id: "s", params: JSON.stringify({ lower: 0, upper: 10 }) }),
+  ];
+  scalar[0].longPool = 5;
+  scalar[0].shortPool = 3;
+  const categorical = [
+    mapCategoricalMarketRow({ market_id: "c", params: JSON.stringify({ outcome_count: 2 }) }),
+  ];
+  categorical[0].outcomes = [{ label: "A", pool: 4 }, { label: "B", pool: 6 }];
+
+  const s = computeProtocolStats(binary, scalar, categorical, 18);
+  assert.equal(s.activeMarkets, 3); // 1 + 1 + 1
+  assert.equal(s.tvlTokens, 20); // binary 2 + scalar 8 + categorical 10
+  assert.equal(s.avgProbBps, 6000); // binary-only average
+});
+
+test("computeProtocolStats: avg confidence is binary-only, zero when no binary", () => {
+  const scalar = [mapScalarMarketRow({ market_id: "s", params: JSON.stringify({ lower: 0, upper: 1 }) })];
+  scalar[0].longPool = 2;
+  scalar[0].shortPool = 2;
+  const s = computeProtocolStats([], scalar, [], 18);
+  assert.equal(s.activeMarkets, 1);
+  assert.equal(s.tvlTokens, 4);
+  assert.equal(s.avgProbBps, 0); // no binary markets -> no confidence figure
 });
 
 test("format helpers", () => {

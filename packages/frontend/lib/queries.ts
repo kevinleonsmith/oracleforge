@@ -170,3 +170,37 @@ export function computeStats(markets: Market[], decimals: number): ProtocolStats
     avgProbBps: Math.round(probSum / markets.length),
   };
 }
+
+/**
+ * Protocol-wide stats across all three market types. Binary pools are base-unit
+ * strings (divided by 10^decimals to tokens); scalar LONG/SHORT and categorical
+ * per-outcome pools are already whole-token numbers (card-def units). TVL and the
+ * active-market count span every type; the average confidence is a binary-only
+ * notion (scalar/categorical carry no committed probability), so it averages the
+ * binary markets alone.
+ */
+export function computeProtocolStats(
+  binary: Market[],
+  scalar: ScalarMarketData[],
+  categorical: CategoricalMarketData[],
+  decimals: number
+): ProtocolStats {
+  let binaryBase = 0n;
+  let probSum = 0;
+  for (const m of binary) {
+    binaryBase += BigInt(m.yesPool || "0") + BigInt(m.noPool || "0");
+    probSum += m.aiProbBps;
+  }
+  const binaryTokens = Number(binaryBase / 10n ** BigInt(decimals));
+
+  let otherTokens = 0;
+  for (const sm of scalar) otherTokens += (sm.longPool || 0) + (sm.shortPool || 0);
+  for (const cm of categorical) for (const o of cm.outcomes) otherTokens += o.pool || 0;
+
+  const activeMarkets = binary.length + scalar.length + categorical.length;
+  return {
+    activeMarkets,
+    tvlTokens: binaryTokens + Math.round(otherTokens),
+    avgProbBps: binary.length ? Math.round(probSum / binary.length) : 0,
+  };
+}

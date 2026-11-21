@@ -14,7 +14,7 @@ import {
   sqlOpenMarkets, sqlLatestPrediction, sqlConfidence, sqlActiveProposals,
   sqlScalarMarkets, sqlCategoricalMarkets,
   mapMarketRow, mapPredictionRow, mapProposalRow,
-  mapScalarMarketRow, mapCategoricalMarketRow, computeStats,
+  mapScalarMarketRow, mapCategoricalMarketRow, computeProtocolStats,
 } from "./queries";
 
 const BYTES32 = /^0x[0-9a-fA-F]{64}$/;
@@ -87,8 +87,12 @@ export async function getCategoricalMarkets(): Promise<CategoricalMarketData[]> 
 }
 
 export async function getProtocolStats() {
-  const markets = await getOpenMarkets();
-  const s = computeStats(markets, deployment.collateralDecimals);
+  // Stats span all three market types: binary pools from the index, scalar +
+  // categorical pools from their (index-read, engine-hydrated) catalogs.
+  const [markets, scalar, categorical] = await Promise.all([
+    getOpenMarkets(), getScalarMarkets(), getCategoricalMarkets(),
+  ]);
+  const s = computeProtocolStats(markets, scalar, categorical, deployment.collateralDecimals);
   return {
     activeMarkets: s.activeMarkets,
     tvlUsd: s.tvlTokens, // collateral is a USD stable on Gnosis (WXDAI), so 1 token ~= $1
