@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(_HERE, "..")))
 from oracleforge_resolver.archive import (  # noqa: E402
     LogReportSink,
     LogTablelandMutator,
+    MarketStatusUpdate,
     OracleReportRow,
     RegistryTablelandMutator,
     TablelandReportSink,
@@ -103,27 +104,63 @@ class OracleReportRowTests(unittest.TestCase):
         self.assertIn("'O''Brien/USD'", row.sql())
 
 
+class MarketStatusUpdateTests(unittest.TestCase):
+    def test_resolved_sets_status_and_outcome(self):
+        u = MarketStatusUpdate.from_report(_binary_report(outcome=1))
+        self.assertEqual(u.status, "RESOLVED")
+        self.assertEqual(u.outcome, 1)
+        sql = u.sql()
+        self.assertEqual(sql, "UPDATE markets SET status='RESOLVED', outcome=1 WHERE market_id='0xabc';")
+
+    def test_void_sets_invalid_and_omits_outcome(self):
+        u = MarketStatusUpdate.from_report(_binary_report(outcome=-1))
+        self.assertEqual(u.status, "INVALID")
+        self.assertIsNone(u.outcome)
+        sql = u.sql()
+        self.assertIn("SET status='INVALID'", sql)
+        self.assertNotIn("outcome", sql)  # a void leaves outcome unset
+
+    def test_categorical_resolved_records_winning_index(self):
+        u = MarketStatusUpdate.from_report(_binary_report(kind="categorical", outcome=2))
+        self.assertEqual(u.status, "RESOLVED")
+        self.assertEqual(u.outcome, 2)  # winning outcome index
+
+    def test_custom_markets_table(self):
+        sql = MarketStatusUpdate.from_report(_binary_report()).sql("markets_100_7")
+        self.assertIn("UPDATE markets_100_7 SET", sql)
+
+
 class TablelandReportSinkTests(unittest.TestCase):
-    def test_record_routes_statement_through_mutator(self):
+    def test_record_emits_both_insert_and_update(self):
         mutator = LogTablelandMutator()
         sink = TablelandReportSink(mutator=mutator)
         sink.record(_binary_report())
         self.assertEqual(len(sink.rows), 1)
-        self.assertEqual(len(mutator.statements), 1)
+        self.assertEqual(len(sink.updates), 1)
+        # one INSERT (evidence) + one UPDATE (catalog transition)
+        self.assertEqual(len(mutator.statements), 2)
         self.assertIn("INSERT INTO oracle_reports", mutator.statements[0])
+        self.assertIn("UPDATE markets SET status='RESOLVED'", mutator.statements[1])
+
+    def test_void_report_updates_markets_to_invalid(self):
+        mutator = LogTablelandMutator()
+        sink = TablelandReportSink(mutator=mutator)
+        sink.record(_binary_report(outcome=-1, answer=None))
+        self.assertIn("UPDATE markets SET status='INVALID'", mutator.statements[1])
 
     def test_default_mutator_is_log(self):
         sink = TablelandReportSink()
         sink.record(_binary_report())
         self.assertIsInstance(sink.mutator, LogTablelandMutator)
-        self.assertEqual(len(sink.mutator.statements), 1)
+        self.assertEqual(len(sink.mutator.statements), 2)
 
     def test_multiple_records_accumulate(self):
         sink = TablelandReportSink()
         sink.record(_binary_report(market_id="0x1"))
         sink.record(_binary_report(market_id="0x2"))
         self.assertEqual([r.market_id for r in sink.rows], ["0x1", "0x2"])
-        self.assertEqual(len(sink.mutator.statements), 2)
+        self.assertEqual([u.market_id for u in sink.updates], ["0x1", "0x2"])
+        self.assertEqual(len(sink.mutator.statements), 4)  # 2 per settlement
 
     def test_custom_table_flows_into_sql(self):
         sink = TablelandReportSink(table="oracle_reports_100_7")

@@ -93,11 +93,14 @@ The oracle adapter address is read from `engine.oracle()` unless
 ## Archival
 
 A settlement produces an `OracleReport` (market, outcome, time, feed, tx). The
-default `LogReportSink` keeps it in memory; `TablelandReportSink` turns it into an
-`oracle_reports` **INSERT** and sends it through a `TablelandMutator`. The statement
-is built purely (`OracleReportRow.sql`, escaped and column-ordered to the shared
-schema) and is identical whether a dry-run logs it (`LogTablelandMutator`, what
-`--tableland` uses) or the live path signs and broadcasts it
+default `LogReportSink` keeps it in memory; `TablelandReportSink` turns it into **two**
+statements — an `oracle_reports` **INSERT** (the evidence) and a `markets` **UPDATE**
+that transitions the catalog row to its terminal state (`MarketStatusUpdate`: a void
+sets `status='INVALID'`, otherwise `status='RESOLVED', outcome=<n>`) — and sends both
+through a `TablelandMutator`. Without the UPDATE the index would keep listing a settled
+market as `OPEN`. Both statements are built purely (escaped, column-ordered to the
+shared schema) and are identical whether a dry-run logs them (`LogTablelandMutator`,
+what `--tableland` uses) or the live path signs and broadcasts them
 (`RegistryTablelandMutator`). So the whole write-back — mapping, column order, SQL,
 escaping — is exercised and tested; the only unexercised seam is the signed
 registry mutation (needs a writer key + RPC). The resolver fills the

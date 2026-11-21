@@ -107,6 +107,44 @@ class OracleReportRow:
         return f"INSERT INTO {table} ({', '.join(cols)}) VALUES ({', '.join(vals)});"
 
 
+DEFAULT_MARKETS_TABLE = "markets"
+
+
+@dataclass
+class MarketStatusUpdate:
+    """The settlement-side transition of a ``markets`` catalog row: when the
+    resolver settles a market it must flip that row from ``OPEN`` to its terminal
+    state, or the index would show a resolved market as still open forever. This is
+    the counterpart to the relayer's creation-time INSERT and to the archiver's
+    ``arweave_tx`` back-fill — all three are ``markets`` writes at different points
+    in a market's life.
+
+    A voided settlement (the report's ``outcome`` is negative — a binary no-winner
+    push or a categorical/invalid void) sets ``INVALID`` and leaves ``outcome``
+    unset; otherwise ``RESOLVED`` with the report's outcome (for scalar the value
+    lives in ``oracle_reports.answer``, so only the status matters here).
+    """
+
+    market_id: str
+    status: str                  # RESOLVED | INVALID
+    outcome: Optional[int]       # None for a void, else the report's outcome
+
+    @classmethod
+    def from_report(cls, r: OracleReport) -> "MarketStatusUpdate":
+        void = r.outcome is not None and r.outcome < 0
+        return cls(
+            market_id=r.market_id,
+            status="INVALID" if void else "RESOLVED",
+            outcome=None if void else r.outcome,
+        )
+
+    def sql(self, table: str = DEFAULT_MARKETS_TABLE) -> str:
+        sets = [f"status={_q(self.status)}"]
+        if self.outcome is not None:
+            sets.append(f"outcome={self.outcome}")
+        return f"UPDATE {table} SET {', '.join(sets)} WHERE market_id={_q(self.market_id)};"
+
+
 # --------------------------------------------------------------------------- #
 # Mutator seam — the signed on-chain write is the ONLY unexercised part         #
 # --------------------------------------------------------------------------- #
@@ -144,21 +182,32 @@ class RegistryTablelandMutator:
 
 
 class TablelandReportSink:
-    """Persists each settlement as an ``oracle_reports`` INSERT.
+    """Persists each settlement as two ``TablelandMutator`` statements: an
+    ``oracle_reports`` INSERT (the settlement evidence) and a ``markets`` UPDATE
+    that transitions the catalog row to its terminal state (``RESOLVED``/``INVALID``).
+    Without the UPDATE the index would keep showing a settled market as ``OPEN``.
 
-    Builds the statement from the report and hands it to a ``TablelandMutator``.
     The default ``LogTablelandMutator`` makes the sink fully usable (and testable)
     without a chain; pass a ``RegistryTablelandMutator`` for the live signed write.
-    Collected ``rows`` are kept for inspection/idempotency checks.
+    Collected ``rows``/``updates`` are kept for inspection/idempotency checks.
     """
 
     def __init__(self, table: str = DEFAULT_REPORTS_TABLE,
-                 mutator: Optional[TablelandMutator] = None):
+                 mutator: Optional[TablelandMutator] = None,
+                 markets_table: str = DEFAULT_MARKETS_TABLE):
         self.table = table
+        self.markets_table = markets_table
         self.mutator = mutator or LogTablelandMutator()
         self.rows: List[OracleReportRow] = []
+        self.updates: List[MarketStatusUpdate] = []
 
     def record(self, report: OracleReport) -> None:
         row = OracleReportRow.from_report(report)
         self.rows.append(row)
         self.mutator.mutate(row.sql(self.table))
+
+        # Flip the catalog row to its terminal state so the index stops listing a
+        # settled market as open.
+        update = MarketStatusUpdate.from_report(report)
+        self.updates.append(update)
+        self.mutator.mutate(update.sql(self.markets_table))
