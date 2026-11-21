@@ -154,7 +154,11 @@ guarded this by snapshotting the posted bond; the binary engine was the outlier.
   full propose/dispute/arbitrate/finalize lifecycle with a `churnBond` action
   rewriting the global bond under open challenges, and asserts solvency holds across
   any history (`engine + paid + treasury == deposited + bonds`). Reverting the fix
-  makes that invariant fail — confirming it has teeth.
+  makes that invariant fail — confirming it has teeth. The scalar and categorical
+  engines carry the same dispute/bond invariant
+  (`{Scalar,Categorical}MarketEngineDisputeInvariant.t.sol`), confirming the snapshot
+  they already had holds under the same adversarial churn — so all three engines are
+  proven bond-conserving across arbitrary dispute histories.
 
 ## Treasury & ForgeToken — focused pass
 

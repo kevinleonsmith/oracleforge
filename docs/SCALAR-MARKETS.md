@@ -125,7 +125,9 @@ clamps and compares the adapter's rescaled value against `lower`/`upper` directl
 **Done — the full vertical:**
 - **Engine** (14 lifecycle/settlement + 2 fuzz properties + 3 stateful solvency
   invariants) and its **optimistic dispute window** (propose → challenge → finalize →
-  arbitrate, 7 tests).
+  arbitrate, 7 tests, plus 3 **dispute/bond stateful invariants** proving bonds are
+  conserved across the full lifecycle while the global bond churns under open
+  challenges).
 - **Oracle:** the `IScalarOracleAdapter` interface + mock and the production
   `ScalarChainlinkAdapter` (16 tests, incl. an end-to-end settle through the engine).
 - **Relayer:** `build_scalar_create_market_args` / `Relayer.run_scalar` create scalar

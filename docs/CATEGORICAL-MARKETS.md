@@ -109,7 +109,10 @@ one, or an admin can deliberately void by arbitrating an out-of-range index.
   hardened posture (two-step admin, zero-address guards, fee snapshot), the
   no-winner / invalid-sentinel voids, and the **opt-in optimistic dispute window**
   (propose → challenge → finalize → admin arbitration, bonded). 22 lifecycle + 10
-  dispute tests.
+  dispute tests, plus 3 **dispute/bond stateful invariants**
+  (`CategoricalMarketEngineDisputeInvariant.t.sol`) proving bonds are conserved
+  across the full lifecycle — including arbitrations that void — while the global
+  bond churns under open challenges.
 - **Oracle:** the `ICategoricalOracleAdapter` interface + `MockCategoricalOracle`,
   and the production `CategoricalChainlinkAdapter` (15 tests, incl. an end-to-end
   settle through the engine).
