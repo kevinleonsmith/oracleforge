@@ -45,6 +45,26 @@ def encode_oracle_params(
     return "0x" + body.hex()
 
 
+def encode_scalar_oracle_params(
+    feed: str, fallback_feed: str, target_decimals: int, max_stale: int
+) -> str:
+    """abi.encode(address,address,uint8,uint64) -> 0x + 128 bytes.
+
+    Matches exactly what ScalarChainlinkAdapter.configure decodes. The scalar
+    adapter reports a rescaled value (no threshold/comparator — that's the binary
+    adapter), so the params carry the target decimals instead.
+    """
+    if not 0 <= target_decimals <= 36:
+        raise ValueError("target_decimals must be in 0..36")
+    body = (
+        _addr_word(feed)
+        + _addr_word(fallback_feed)
+        + _uint_word(target_decimals)
+        + _uint_word(max_stale)
+    )
+    return "0x" + body.hex()
+
+
 def question_hash(question: str) -> str:
     """keccak256(utf8(question)) — the on-chain bytes32 questionHash."""
     return "0x" + keccak256(question.encode("utf-8")).hex()

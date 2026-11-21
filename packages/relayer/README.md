@@ -34,12 +34,32 @@ For each AI market proposal the relayer:
 # full pipeline with no chain and no live rollup (generator -> stub forecast -> would-submit)
 python3 -m oracleforge_relayer.cli --dry-run
 
+# relay sample scalar (range) markets to the ScalarMarketEngine
+python3 -m oracleforge_relayer.cli --dry-run --scalar
+
 # relay a saved proposal set
 python3 -m oracleforge_relayer.cli --proposals proposals.json --dry-run
 
 # tests (stdlib only — keccak vectors, ABI layout, mapping, orchestration)
 python3 -m unittest discover -s tests -t .
 ```
+
+## Validation (the write path)
+
+Every proposal is validated before a `createMarket` is built, so a malformed one
+is **skipped** (not submitted with bad data, and not surfaced as a batch error):
+`close_at` must be in uint64 range and future, `threshold` present and in int256
+range, `comparator` ∈ {0,1}, `max_stale` in uint64 range, and the feed must resolve
+to an address. Unknown feeds and out-of-range values all skip.
+
+## Scalar (range) markets
+
+The relayer can also create scalar markets on the `ScalarMarketEngine`: a scalar
+proposal carries a `band {lower, upper}` and a scalar oracle spec (`target_decimals`
+instead of a threshold/comparator), and needs **no Cartesi forecast** — the band and
+oracle define the market. `build_scalar_create_market_args` / `Relayer.run_scalar`
+mirror the binary path (same marketId derivation, so dedupe is cross-consistent);
+`ScalarGnosisChain` is the live submitter. See [`docs/SCALAR-MARKETS.md`](../../docs/SCALAR-MARKETS.md).
 
 ### Submit on-chain
 

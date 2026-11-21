@@ -76,5 +76,27 @@ class MarketIdTests(unittest.TestCase):
         )
 
 
+class ScalarOracleParamsTests(unittest.TestCase):
+    FEED = "0x000000000000000000000000000000000000Fe02"
+    FB = "0x000000000000000000000000000000000000Fe99"
+
+    def test_length_is_128_bytes(self):
+        enc = abi.encode_scalar_oracle_params(self.FEED, self.FB, 0, 3600)
+        self.assertTrue(enc.startswith("0x"))
+        self.assertEqual(len(enc) - 2, 256)  # 4 words * 32 bytes * 2 hex
+
+    def test_word_layout(self):
+        enc = abi.encode_scalar_oracle_params(self.FEED, self.FB, 8, 1800)[2:]
+        words = [enc[i:i + 64] for i in range(0, len(enc), 64)]
+        self.assertEqual(words[0][-40:].lower(), self.FEED[2:].lower())  # feed
+        self.assertEqual(words[1][-40:].lower(), self.FB[2:].lower())    # fallback
+        self.assertEqual(int(words[2], 16), 8)     # target_decimals
+        self.assertEqual(int(words[3], 16), 1800)  # max_stale
+
+    def test_rejects_excessive_decimals(self):
+        with self.assertRaises(ValueError):
+            abi.encode_scalar_oracle_params(self.FEED, self.FB, 37, 3600)
+
+
 if __name__ == "__main__":
     unittest.main()

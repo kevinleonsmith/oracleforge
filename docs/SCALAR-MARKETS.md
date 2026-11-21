@@ -120,6 +120,10 @@ clamps and compares the adapter's rescaled value against `lower`/`upper` directl
   dispute window** (propose → challenge → finalize → arbitrate, 7 tests).
 - **Oracle:** the `IScalarOracleAdapter` interface + mock and the production
   `ScalarChainlinkAdapter` (16 tests, incl. an end-to-end settle through the engine).
+- **Relayer:** `build_scalar_create_market_args` / `Relayer.run_scalar` create scalar
+  markets on the `ScalarMarketEngine` (band + scalar oracle spec, no Cartesi forecast
+  needed); `ScalarGnosisChain` is the live submitter. Dedupe shares the binary
+  marketId derivation.
 - **Resolver:** `ScalarWatcher` drives the shared `resolve()`/`finalize()` lifecycle
   from the scalar oracle's `latestValue()`, archiving the settled value (15 tests;
   `--dry-run --scalar`).
