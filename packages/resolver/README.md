@@ -45,6 +45,7 @@ a benign error, not a crash.
 | `chain.py` | `GnosisResolver` (web3) · `DryRunResolver` (no network) — shared `resolve()`/`finalize()` drive all three engines |
 | `archive.py` | `LogReportSink` (default) · `TablelandReportSink` → `oracle_reports` INSERT via a `TablelandMutator` (`LogTablelandMutator` dry-run · `RegistryTablelandMutator` signed) |
 | `watcher.py` | orchestration: `Watcher` (binary) · `ScalarWatcher` (range) · `CategoricalWatcher` (N-outcome), each `tick()` once / `watch()` loops |
+| `positions.py` | `PositionIndexer`: `PositionTaken` events → `positions` INSERTs via the same mutator seam (stub source dry-run · `ChainPositionEventSource` live), filling the trade-time index table |
 
 ## Scalar & categorical markets
 
@@ -67,6 +68,7 @@ python3 -m oracleforge_resolver.cli --dry-run
 python3 -m oracleforge_resolver.cli --dry-run --scalar   # the scalar-market variant
 python3 -m oracleforge_resolver.cli --dry-run --categorical # the categorical variant
 python3 -m oracleforge_resolver.cli --dry-run --tableland # also print the Tableland SQL (oracle_reports INSERTs + markets catalog UPDATEs)
+python3 -m oracleforge_resolver.cli --dry-run --positions # index sample PositionTaken events as positions INSERTs
 
 # tests (stdlib only)
 python3 -m unittest discover -s tests -t .

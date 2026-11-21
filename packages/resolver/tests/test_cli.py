@@ -44,5 +44,14 @@ class TablelandOutputTests(unittest.TestCase):
         self.assertNotIn("INSERT INTO oracle_reports", out)
 
 
+class PositionsFlagTests(unittest.TestCase):
+    def test_positions_dry_run_prints_position_inserts(self):
+        out = _run("--dry-run", "--positions")
+        self.assertIn("positions -> Tableland", out)
+        self.assertIn("INSERT INTO positions", out)
+        self.assertIn("'0xAlice'", out)
+        self.assertIn("indexed 2 position(s)", out)
+
+
 if __name__ == "__main__":
     unittest.main()

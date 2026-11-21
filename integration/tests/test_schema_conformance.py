@@ -38,6 +38,7 @@ from oracleforge_resolver.archive import (  # noqa: E402
     OracleReportRow,
 )
 from oracleforge_resolver.models import OracleReport  # noqa: E402
+from oracleforge_resolver.positions import PositionEvent, PositionRow  # noqa: E402
 
 NOW = 1_737_010_000
 CHAIN = 10200
@@ -169,6 +170,23 @@ class OracleReportsConforms(unittest.TestCase):
         self.con.row_factory = sqlite3.Row
         row = self.con.execute("SELECT market_type, outcome FROM oracle_reports WHERE market_id='0xc'").fetchone()
         self.assertEqual((row["market_type"], row["outcome"]), ("categorical", 0))
+
+
+class PositionsConforms(unittest.TestCase):
+    def setUp(self):
+        self.con = _db()
+
+    def test_position_row_inserts_against_schema(self):
+        ev = PositionEvent.from_dict({
+            "market_id": "0xMKT", "account": "0xAlice", "side": 1, "amount": 10 ** 24,
+            "tx_hash": "0xdead", "created_at": NOW})
+        self.con.execute(PositionRow.from_event(ev).sql("positions"))
+        self.con.row_factory = sqlite3.Row
+        r = self.con.execute("SELECT * FROM positions WHERE market_id='0xMKT'").fetchone()
+        self.assertEqual(r["account"], "0xAlice")
+        self.assertEqual(r["side"], 1)
+        self.assertEqual(r["amount"], str(10 ** 24))  # uint256 round-trips as a string
+        self.assertEqual(r["claimed"], 0)             # schema/default
 
 
 class PredictionsConforms(unittest.TestCase):

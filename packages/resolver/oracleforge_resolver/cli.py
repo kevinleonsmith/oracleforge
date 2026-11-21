@@ -86,7 +86,30 @@ def main(argv=None) -> int:
     ap.add_argument("--once", action="store_true", help="live: a single tick then exit")
     ap.add_argument("--tableland", action="store_true",
                     help="archive settlements as oracle_reports INSERTs (dry-run: prints the SQL)")
+    ap.add_argument("--positions", action="store_true",
+                    help="dry-run: index sample PositionTaken events as positions INSERTs")
     args = ap.parse_args(argv)
+
+    # Positions indexer dry-run: turn sample trades into positions INSERTs.
+    if args.positions and not args.watch:
+        import time as _t
+        from .archive import LogTablelandMutator
+        from .positions import PositionEvent, PositionIndexer, StubPositionEventSource
+
+        now = int(_t.time())
+        events = [
+            PositionEvent.from_dict({"market_id": "0xA7F3", "account": "0xAlice", "side": 1,
+                                     "amount": 600_000000, "tx_hash": "0xt1", "created_at": now}),
+            PositionEvent.from_dict({"market_id": "0xA7F3", "account": "0xBob", "side": 0,
+                                     "amount": 400_000000, "tx_hash": "0xt2", "created_at": now}),
+        ]
+        mutator = LogTablelandMutator()
+        rows = PositionIndexer(StubPositionEventSource(events), mutator=mutator).index()
+        print(f"indexed {len(rows)} position(s)")
+        print("\npositions -> Tableland (would sign & send):")
+        for stmt in mutator.statements:
+            print(f"  {stmt}")
+        return 0
 
     from .archive import LogReportSink, TablelandReportSink
     from .config import Config
