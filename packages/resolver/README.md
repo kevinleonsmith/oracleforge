@@ -41,17 +41,23 @@ a benign error, not a crash.
 |------|------|
 | `planner.py` | pure decision function — `plan` (binary) · `plan_scalar` (range) |
 | `sources.py` | `StaticMarketSource` (dry-run) · `TablelandMarketSource` (live, read-only) |
-| `oracle.py` | `StubOracleView`/`ChainOracleView` (binary `resolve()`) · `StubScalarOracleView`/`ChainScalarOracleView` (scalar `latestValue()`) |
-| `chain.py` | `GnosisResolver` (web3) · `DryRunResolver` (no network) — shared `resolve()`/`finalize()` drive both engines |
+| `oracle.py` | `StubOracleView`/`ChainOracleView` (binary `resolve()`) · `StubScalarOracleView`/`ChainScalarOracleView` (scalar `latestValue()`) · `StubCategoricalOracleView`/`ChainCategoricalOracleView` (categorical `latestOutcome()`) |
+| `chain.py` | `GnosisResolver` (web3) · `DryRunResolver` (no network) — shared `resolve()`/`finalize()` drive all three engines |
 | `archive.py` | `LogReportSink` (default) · `TablelandReportSink` → `oracle_reports` INSERT via a `TablelandMutator` (`LogTablelandMutator` dry-run · `RegistryTablelandMutator` signed) |
-| `watcher.py` | orchestration: `Watcher` (binary) · `ScalarWatcher` (range), each `tick()` once / `watch()` loops |
+| `watcher.py` | orchestration: `Watcher` (binary) · `ScalarWatcher` (range) · `CategoricalWatcher` (N-outcome), each `tick()` once / `watch()` loops |
 
-## Scalar (range) markets
+## Scalar & categorical markets
 
-The `ScalarMarketEngine` shares the same `resolve()`/`finalize()` lifecycle, so
-`ScalarWatcher` drives it with the identical propose → wait → finalize flow; it
-only differs in reading the scalar oracle's `latestValue()` (a numeric value, not a
-yes/no) and archiving the settled value. See [`docs/SCALAR-MARKETS.md`](../../docs/SCALAR-MARKETS.md).
+The `ScalarMarketEngine` and `CategoricalMarketEngine` share the same
+`resolve()`/`finalize()` lifecycle and dispute window, so `ScalarWatcher` and
+`CategoricalWatcher` drive them with the identical propose → wait → finalize flow;
+each only differs in what it reads from the oracle and archives:
+
+- **scalar** reads `latestValue()` (a numeric value) and archives the settled value
+  (`--dry-run --scalar`). See [`docs/SCALAR-MARKETS.md`](../../docs/SCALAR-MARKETS.md).
+- **categorical** reads `latestOutcome()` (the winning index) and archives that
+  index, or `-1` for a void when the oracle reports the `0xFF` sentinel
+  (`--dry-run --categorical`). See [`docs/CATEGORICAL-MARKETS.md`](../../docs/CATEGORICAL-MARKETS.md).
 
 ## Run
 
@@ -59,6 +65,7 @@ yes/no) and archiving the settled value. See [`docs/SCALAR-MARKETS.md`](../../do
 # one tick over a sample spread (no chain): shows wait/pending/resolve/settled
 python3 -m oracleforge_resolver.cli --dry-run
 python3 -m oracleforge_resolver.cli --dry-run --scalar   # the scalar-market variant
+python3 -m oracleforge_resolver.cli --dry-run --categorical # the categorical variant
 python3 -m oracleforge_resolver.cli --dry-run --tableland # also print the oracle_reports INSERTs
 
 # tests (stdlib only)

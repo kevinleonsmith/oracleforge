@@ -15,6 +15,13 @@ from .models import Action, Decision, Market, Outcome, Status
 OutcomeFn = Callable[[str], Outcome]
 # Scalar equivalent: market_id -> (ready, value).
 ValueFn = Callable[[str], Tuple[bool, int]]
+# Categorical equivalent: market_id -> (ready, winning outcome index).
+WinningOutcomeFn = Callable[[str], Tuple[bool, int]]
+
+# The engine's out-of-range sentinel: an oracle outcome at or above this signals an
+# invalid/cancelled market (a void). Valid outcome indices are 0..outcomeCount-1,
+# and the engine caps outcomeCount at 64, so 0xFF can never be a real index.
+INVALID_OUTCOME = 0xFF
 
 
 def _predicted_outcome(o: Outcome):
@@ -121,3 +128,66 @@ def plan_scalar(
     markets: List[Market], now: int, value_fn: ValueFn, challenge_window: int = 0
 ) -> List[Decision]:
     return [plan_scalar_one(m, now, value_fn, challenge_window) for m in markets]
+
+
+# ------------------------------------------------------------ categorical markets
+
+
+def _predicted_categorical(outcome: int):
+    """Map a winning outcome index to (predicted, label). The out-of-range
+    sentinel (>= INVALID_OUTCOME) is a void, signalled as predicted=None — the
+    same convention the binary planner uses for Outcome.Invalid."""
+    if outcome >= INVALID_OUTCOME:
+        return None, "oracle ready: INVALID (void)"
+    return outcome, f"oracle ready: outcome {outcome}"
+
+
+def plan_categorical_one(
+    market: Market, now: int, outcome_fn: WinningOutcomeFn, challenge_window: int = 0
+) -> Decision:
+    """Categorical analogue of plan_one. Identical lifecycle — the only difference
+    is that readiness and the proposed payload come from the categorical oracle's
+    ``(ready, winning index)`` instead of a yes/no Outcome. The
+    CategoricalMarketEngine shares resolve()/finalize() and the
+    Open->Closed->Resolved status flow, so the decisions carry straight over."""
+    if market.status in (Status.Resolved, Status.Invalid):
+        return Decision(market.market_id, Action.SETTLED, reason="already settled")
+
+    # Proposed outcome in its challenge window: wait it out, then finalize(). The
+    # engine already stored the proposed index; the read here just labels the
+    # archival record. Inert when challenge_window == 0 (resolve finalizes inline).
+    if market.status == Status.Closed:
+        deadline = market.proposed_at + challenge_window
+        if now < deadline:
+            return Decision(
+                market.market_id, Action.WAIT,
+                reason=f"challenge window: {deadline - now}s left",
+            )
+        _, outcome = outcome_fn(market.market_id)
+        predicted, label = _predicted_categorical(outcome)
+        return Decision(
+            market.market_id, Action.FINALIZE, predicted_outcome=predicted,
+            reason=f"window elapsed -> finalize ({label})",
+        )
+
+    if now < market.close_at:
+        return Decision(
+            market.market_id, Action.WAIT,
+            reason=f"closes in {market.close_at - now}s",
+        )
+
+    # past close and unsettled -> ask the categorical oracle for the winning index
+    ready, outcome = outcome_fn(market.market_id)
+    if not ready:
+        return Decision(market.market_id, Action.PENDING, reason="oracle feed not ready")
+
+    predicted, reason = _predicted_categorical(outcome)
+    return Decision(
+        market.market_id, Action.RESOLVE, predicted_outcome=predicted, reason=reason
+    )
+
+
+def plan_categorical(
+    markets: List[Market], now: int, outcome_fn: WinningOutcomeFn, challenge_window: int = 0
+) -> List[Decision]:
+    return [plan_categorical_one(m, now, outcome_fn, challenge_window) for m in markets]

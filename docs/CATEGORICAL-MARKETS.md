@@ -102,10 +102,15 @@ one, or an admin can deliberately void by arbitrating an out-of-range index.
 - **Oracle:** the `ICategoricalOracleAdapter` interface + `MockCategoricalOracle`.
 - **Properties:** value conservation fuzzed across a two-winner book and across a
   variable outcome count with an arbitrary winner (2 fuzz tests, 512 runs each).
+- **Resolver:** `CategoricalWatcher` drives the shared `resolve()`/`finalize()`
+  lifecycle from the categorical oracle's `latestOutcome()`, archiving the winning
+  index (or `-1` for a void). It reuses the same propose → wait → finalize flow and
+  the dispute window, differing only in reading a winning index instead of a yes/no
+  or a number (`--dry-run --categorical`). The out-of-range sentinel `0xFF` is the
+  void signal. 10 planner + 7 watcher tests.
 
 **Next (the rest of the vertical, as it was built out for scalar):**
 - a **Chainlink / categorical oracle adapter** for a real winning-index feed;
 - **relayer** create-market support (an `outcomeCount` + oracle spec);
-- **resolver** settlement driving (`CategoricalWatcher`);
 - a **frontend** panel (per-outcome pools, implied probabilities, payout preview);
 - **devnet parity** against the real engine, like the binary and scalar engines.
