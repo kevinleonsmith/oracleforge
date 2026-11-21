@@ -37,6 +37,9 @@ python3 -m oracleforge_relayer.cli --dry-run
 # relay sample scalar (range) markets to the ScalarMarketEngine
 python3 -m oracleforge_relayer.cli --dry-run --scalar
 
+# relay sample categorical (N-outcome) markets to the CategoricalMarketEngine
+python3 -m oracleforge_relayer.cli --dry-run --categorical
+
 # relay a saved proposal set
 python3 -m oracleforge_relayer.cli --proposals proposals.json --dry-run
 
@@ -52,14 +55,22 @@ is **skipped** (not submitted with bad data, and not surfaced as a batch error):
 range, `comparator` ∈ {0,1}, `max_stale` in uint64 range, and the feed must resolve
 to an address. Unknown feeds and out-of-range values all skip.
 
-## Scalar (range) markets
+## Scalar & categorical markets
 
-The relayer can also create scalar markets on the `ScalarMarketEngine`: a scalar
-proposal carries a `band {lower, upper}` and a scalar oracle spec (`target_decimals`
-instead of a threshold/comparator), and needs **no Cartesi forecast** — the band and
-oracle define the market. `build_scalar_create_market_args` / `Relayer.run_scalar`
-mirror the binary path (same marketId derivation, so dedupe is cross-consistent);
-`ScalarGnosisChain` is the live submitter. See [`docs/SCALAR-MARKETS.md`](../../docs/SCALAR-MARKETS.md).
+The relayer also creates markets on the other two engines, each a straight
+map → create with **no Cartesi forecast** (the market shape, not a probability,
+defines it) and the identical marketId derivation, so dedupe is cross-consistent
+across all three:
+
+- **scalar** — a `band {lower, upper}` + a scalar oracle spec (`target_decimals`
+  instead of threshold/comparator). `build_scalar_create_market_args` /
+  `Relayer.run_scalar`; `ScalarGnosisChain` is the live submitter.
+  See [`docs/SCALAR-MARKETS.md`](../../docs/SCALAR-MARKETS.md).
+- **categorical** — an `outcomes` label list (or `outcome_count`, 2..64) + a
+  categorical oracle spec (just the feed(s) + `max_stale`; the winning index is
+  what the oracle reports). `build_categorical_create_market_args` /
+  `Relayer.run_categorical`; `CategoricalGnosisChain` is the live submitter.
+  See [`docs/CATEGORICAL-MARKETS.md`](../../docs/CATEGORICAL-MARKETS.md).
 
 ### Submit on-chain
 

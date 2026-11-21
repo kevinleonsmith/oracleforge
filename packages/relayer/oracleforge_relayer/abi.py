@@ -65,6 +65,26 @@ def encode_scalar_oracle_params(
     return "0x" + body.hex()
 
 
+def encode_categorical_oracle_params(
+    feed: str, fallback_feed: str, max_stale: int
+) -> str:
+    """abi.encode(address,address,uint64) -> 0x + 96 bytes.
+
+    The categorical oracle reports a winning outcome *index*; the number of
+    outcomes is a createMarket argument (like the scalar band), not an oracle
+    param, so the params carry only the feed(s) and the staleness bound — the
+    minimal config a future CategoricalChainlinkAdapter needs.
+    """
+    if max_stale < 0:
+        raise ValueError("max_stale cannot be negative")
+    body = (
+        _addr_word(feed)
+        + _addr_word(fallback_feed)
+        + _uint_word(max_stale)
+    )
+    return "0x" + body.hex()
+
+
 def question_hash(question: str) -> str:
     """keccak256(utf8(question)) — the on-chain bytes32 questionHash."""
     return "0x" + keccak256(question.encode("utf-8")).hex()

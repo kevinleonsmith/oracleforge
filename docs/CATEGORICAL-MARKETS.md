@@ -102,6 +102,13 @@ one, or an admin can deliberately void by arbitrating an out-of-range index.
 - **Oracle:** the `ICategoricalOracleAdapter` interface + `MockCategoricalOracle`.
 - **Properties:** value conservation fuzzed across a two-winner book and across a
   variable outcome count with an arbitrary winner (2 fuzz tests, 512 runs each).
+- **Relayer:** `build_categorical_create_market_args` / `Relayer.run_categorical`
+  create categorical markets on the `CategoricalMarketEngine` — an `outcomes` label
+  list (or `outcome_count`, validated 2..64) plus a categorical oracle spec (just the
+  feed(s) + `max_stale`; the winning index is what the oracle reports, so no
+  threshold/band). No Cartesi forecast is threaded, and the marketId derivation is
+  identical, so dedupe is cross-consistent with binary and scalar.
+  `CategoricalGnosisChain` is the live submitter (`--dry-run --categorical`).
 - **Resolver:** `CategoricalWatcher` drives the shared `resolve()`/`finalize()`
   lifecycle from the categorical oracle's `latestOutcome()`, archiving the winning
   index (or `-1` for a void). It reuses the same propose → wait → finalize flow and
@@ -109,8 +116,10 @@ one, or an admin can deliberately void by arbitrating an out-of-range index.
   or a number (`--dry-run --categorical`). The out-of-range sentinel `0xFF` is the
   void signal. 10 planner + 7 watcher tests.
 
+So categorical markets are now **created and settled by the workers** end to end,
+on top of the contract engine and its dispute window.
+
 **Next (the rest of the vertical, as it was built out for scalar):**
 - a **Chainlink / categorical oracle adapter** for a real winning-index feed;
-- **relayer** create-market support (an `outcomeCount` + oracle spec);
 - a **frontend** panel (per-outcome pools, implied probabilities, payout preview);
 - **devnet parity** against the real engine, like the binary and scalar engines.

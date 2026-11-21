@@ -56,6 +56,27 @@ def _print_scalar_table(results) -> None:
             print(f"{'':<10} └─ {r.detail}")
 
 
+def _sample_categorical_proposals(now: int) -> list[dict]:
+    day = 86400
+    return [
+        {"question": "Which team wins the championship?", "category": "SPORTS",
+         "close_at": now + 30 * day, "outcomes": ["Home", "Away", "Draw"],
+         "oracle": {"feed": "FUNCTIONS/SPORTS", "max_stale": 3600}},
+        {"question": "Which party takes the contested seat?", "category": "POLITICS",
+         "close_at": now + 60 * day, "outcome_count": 4,
+         "oracle": {"feed": "FUNCTIONS/ELECTION", "max_stale": 86400}},
+    ]
+
+
+def _print_categorical_table(results) -> None:
+    print(f"{'STATUS':<10} {'MARKET_ID':<14} QUESTION")
+    print("-" * 80)
+    for r in results:
+        print(f"{r.status:<10} {(r.market_id or '')[:12]:<14} {r.question[:48]}")
+        if r.detail:
+            print(f"{'':<10} └─ {r.detail}")
+
+
 def _print_table(results) -> None:
     print(f"{'STATUS':<10} {'PROB':>5}  {'MARKET_ID':<14} QUESTION")
     print("-" * 86)
@@ -73,6 +94,7 @@ def main(argv=None) -> int:
     ap.add_argument("--dry-run", action="store_true", help="no chain writes (default if no env)")
     ap.add_argument("--submit", action="store_true", help="submit createMarket on-chain")
     ap.add_argument("--scalar", action="store_true", help="relay sample scalar (range) markets")
+    ap.add_argument("--categorical", action="store_true", help="relay sample categorical (N-outcome) markets")
     ap.add_argument("--proposals", help="path to a proposals JSON file (else run the generator)")
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--min-confidence", type=float, default=0.45)
@@ -95,6 +117,18 @@ def main(argv=None) -> int:
         _print_scalar_table(results)
         submitted = sum(1 for r in results if r.status == "submitted")
         print(f"\n{submitted}/{len(results)} scalar market(s) would be submitted (dry-run).")
+        return 0
+
+    # Categorical dry-run demo: map sample N-outcome markets to creations.
+    if args.categorical and not args.submit:
+        import time as _t
+        from .chain import DryRunChain
+
+        relayer = Relayer(DryRunChain(chain_id=cfg.chain_id), FeedRegistry())
+        results = relayer.run_categorical(_sample_categorical_proposals(int(_t.time())))
+        _print_categorical_table(results)
+        submitted = sum(1 for r in results if r.status == "submitted")
+        print(f"\n{submitted}/{len(results)} categorical market(s) would be submitted (dry-run).")
         return 0
 
     # proposals

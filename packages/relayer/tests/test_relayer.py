@@ -11,6 +11,7 @@ from oracleforge_relayer.chain import DryRunChain  # noqa: E402
 from oracleforge_relayer.feeds import FeedRegistry  # noqa: E402
 from oracleforge_relayer.mapping import (  # noqa: E402
     SkipProposal,
+    build_categorical_create_market_args,
     build_create_market_args,
     build_scalar_create_market_args,
 )
@@ -142,6 +143,88 @@ class ScalarMappingTests(unittest.TestCase):
         p = {**SCALAR_PROPOSAL, "oracle": {**SCALAR_PROPOSAL["oracle"], "target_decimals": 37}}
         with self.assertRaises(SkipProposal):
             build_scalar_create_market_args(p, 10200, self.reg, NOW)
+
+
+CATEGORICAL_PROPOSAL = {
+    "question": "Which team wins the championship?",
+    "category": "SPORTS",
+    "close_at": NOW + 30 * 86400,
+    "outcomes": ["Home", "Away", "Draw"],
+    "oracle": {"feed": "FUNCTIONS/SPORTS", "fallback_feed": None, "max_stale": 3600},
+}
+
+
+class CategoricalMappingTests(unittest.TestCase):
+    def setUp(self):
+        self.reg = FeedRegistry()
+
+    def test_builds_valid_categorical_args(self):
+        args = build_categorical_create_market_args(CATEGORICAL_PROPOSAL, 10200, self.reg, NOW)
+        self.assertEqual(args.outcome_count, 3)  # from the outcomes list
+        self.assertEqual(len(args.oracle_params) - 2, 192)  # 96 bytes
+        self.assertEqual(len(args.as_tx_args()), 4)
+        self.assertEqual(args.as_tx_args()[2], 3)  # outcomeCount in positional args
+        self.assertTrue(args.market_id.startswith("0x"))
+
+    def test_outcome_count_field_used_when_no_list(self):
+        p = {k: v for k, v in CATEGORICAL_PROPOSAL.items() if k != "outcomes"}
+        p["outcome_count"] = 5
+        args = build_categorical_create_market_args(p, 10200, self.reg, NOW)
+        self.assertEqual(args.outcome_count, 5)
+
+    def test_market_id_matches_binary_derivation(self):
+        # same keccak(questionHash, closeAt, chainId) -> dedupe is cross-consistent
+        from oracleforge_relayer import abi
+        args = build_categorical_create_market_args(CATEGORICAL_PROPOSAL, 10200, self.reg, NOW)
+        qh = abi.question_hash(CATEGORICAL_PROPOSAL["question"])
+        self.assertEqual(args.market_id, abi.market_id(qh, CATEGORICAL_PROPOSAL["close_at"], 10200))
+
+    def test_too_few_outcomes_skips(self):
+        p = {**CATEGORICAL_PROPOSAL, "outcomes": ["only-one"]}
+        with self.assertRaises(SkipProposal):
+            build_categorical_create_market_args(p, 10200, self.reg, NOW)
+
+    def test_too_many_outcomes_skips(self):
+        p = {k: v for k, v in CATEGORICAL_PROPOSAL.items() if k != "outcomes"}
+        p["outcome_count"] = 65  # engine caps at 64
+        with self.assertRaises(SkipProposal):
+            build_categorical_create_market_args(p, 10200, self.reg, NOW)
+
+    def test_missing_outcomes_skips(self):
+        p = {k: v for k, v in CATEGORICAL_PROPOSAL.items() if k != "outcomes"}
+        with self.assertRaises(SkipProposal):
+            build_categorical_create_market_args(p, 10200, self.reg, NOW)
+
+    def test_unknown_feed_skips(self):
+        p = {**CATEGORICAL_PROPOSAL, "oracle": {**CATEGORICAL_PROPOSAL["oracle"], "feed": "MYSTERY"}}
+        with self.assertRaises(SkipProposal):
+            build_categorical_create_market_args(p, 10200, self.reg, NOW)
+
+
+class CategoricalOrchestrationTests(unittest.TestCase):
+    def _relayer(self):
+        chain = DryRunChain(chain_id=10200)
+        return Relayer(chain, FeedRegistry(), now_ts_fn=lambda: NOW), chain
+
+    def test_run_categorical_submits(self):
+        relayer, chain = self._relayer()
+        [r] = relayer.run_categorical([CATEGORICAL_PROPOSAL])
+        self.assertEqual(r.status, "submitted")
+        self.assertEqual(len(chain.categorical_submitted), 1)
+        self.assertEqual(chain.categorical_submitted[0].outcome_count, 3)
+        self.assertTrue(r.tx_hash.startswith("0xDRYCAT"))
+
+    def test_categorical_idempotent_second_run_sees_exists(self):
+        relayer, _ = self._relayer()
+        relayer.run_categorical([CATEGORICAL_PROPOSAL])
+        [r] = relayer.run_categorical([CATEGORICAL_PROPOSAL])
+        self.assertEqual(r.status, "exists")
+
+    def test_categorical_bad_proposal_skips_not_errors(self):
+        relayer, _ = self._relayer()
+        bad = {**CATEGORICAL_PROPOSAL, "outcomes": ["only-one"]}
+        [r] = relayer.run_categorical([bad])
+        self.assertEqual(r.status, "skipped")
 
 
 class ScalarOrchestrationTests(unittest.TestCase):

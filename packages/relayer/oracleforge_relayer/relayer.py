@@ -13,7 +13,12 @@ from typing import Any, Dict, List, Optional
 
 from .chain import Chain
 from .feeds import FeedRegistry
-from .mapping import SkipProposal, build_create_market_args, build_scalar_create_market_args
+from .mapping import (
+    SkipProposal,
+    build_categorical_create_market_args,
+    build_create_market_args,
+    build_scalar_create_market_args,
+)
 from .notices import StubNoticeSource
 
 logger = logging.getLogger("oracleforge.relayer")
@@ -152,4 +157,40 @@ class Relayer:
         for r in results:
             counts[r.status] = counts.get(r.status, 0) + 1
         logger.info("scalar relay complete: %s", counts)
+        return results
+
+    # ------------------------------------------------------- categorical markets
+
+    def relay_categorical_one(self, proposal: Dict[str, Any]) -> RelayResult:
+        """Relay one categorical (N-outcome) proposal. Like scalar, no Cartesi
+        forecast is needed — the outcome set and oracle define the market — so this
+        is a straight map -> create."""
+        q = proposal.get("question", "<unknown>")
+        try:
+            args = build_categorical_create_market_args(
+                proposal, self.chain.chain_id, self.registry, self._now()
+            )
+        except SkipProposal as e:
+            return RelayResult(q, None, "skipped", str(e))
+        except Exception as e:  # noqa: BLE001
+            return RelayResult(q, None, "error", f"{type(e).__name__}: {e}")
+
+        if self.chain.market_exists(args.market_id):
+            return RelayResult(q, args.market_id, "exists", "already on-chain")
+        try:
+            tx = self.chain.create_categorical_market(args)  # type: ignore[attr-defined]
+        except Exception as e:  # noqa: BLE001
+            return RelayResult(q, args.market_id, "error", f"{type(e).__name__}: {e}")
+        return RelayResult(q, args.market_id, "submitted", "", tx_hash=tx)
+
+    def run_categorical(self, proposals: List[Dict[str, Any]]) -> List[RelayResult]:
+        if not self.chain.is_relayer():
+            raise PermissionError(
+                f"account {self.chain.account} is not an authorized relayer on the engine"
+            )
+        results = [self.relay_categorical_one(p) for p in proposals]
+        counts: Dict[str, int] = {}
+        for r in results:
+            counts[r.status] = counts.get(r.status, 0) + 1
+        logger.info("categorical relay complete: %s", counts)
         return results
