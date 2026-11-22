@@ -10,6 +10,7 @@ import {ScalarMarketEngine} from "../src/ScalarMarketEngine.sol";
 import {CategoricalChainlinkAdapter} from "../src/oracle/CategoricalChainlinkAdapter.sol";
 import {CategoricalMarketEngine} from "../src/CategoricalMarketEngine.sol";
 import {ForgeGovernor} from "../src/ForgeGovernor.sol";
+import {MockERC20} from "../src/mocks/MockERC20.sol";
 
 /// @notice Deployment for Gnosis Chain / Chiado testnet. Brings up the shared
 ///         infrastructure (Treasury + ForgeToken) and all three market engines —
@@ -57,10 +58,18 @@ contract Deploy {
         // Gnosis Safe / timelock before mainnet.
         address gov = msg.sender;
 
-        // Collateral is a canonical stable on Gnosis (e.g. WXDAI). Pass via env.
-        address col = vmEnvAddressOr("COLLATERAL", address(0xe91D153E0b41518A2Ce8Dd3D7944Fa863463a97d)); // WXDAI
+        // Collateral: a canonical stable on Gnosis mainnet (WXDAI) in production,
+        // passed via the COLLATERAL env. When it is unset (a testnet/demo deploy),
+        // deploy a freely-mintable test token so anyone can faucet funds and trade
+        // without hunting for a specific asset — MockERC20.mint is public.
+        address colEnv = vmEnvAddressOr("COLLATERAL", address(0));
 
         _broadcast();
+
+        address col = colEnv;
+        if (col == address(0)) {
+            col = address(new MockERC20("OracleForge USD", "ofUSD", 18));
+        }
 
         // Shared infrastructure.
         Treasury t = new Treasury(gov);

@@ -20,19 +20,29 @@ const WANTED = [
   "ForgeGovernor",
 ];
 
+const WXDAI = "0xe91D153E0b41518A2Ce8Dd3D7944Fa863463a97d"; // Gnosis mainnet WXDAI (prod default)
+
 /** Build a deployment book from a parsed Foundry broadcast object. */
 export function extractAddresses(broadcast, opts = {}) {
   const contracts = Object.fromEntries(WANTED.map((n) => [n, ZERO]));
+  let demoCollateral = null;
   for (const tx of broadcast.transactions ?? []) {
-    if (tx.transactionType === "CREATE" && WANTED.includes(tx.contractName)) {
+    if (tx.transactionType !== "CREATE") continue;
+    if (WANTED.includes(tx.contractName)) {
       contracts[tx.contractName] = (tx.contractAddress ?? ZERO).toLowerCase();
     }
+    // the deploy self-provisions a MockERC20 as collateral on a testnet/demo deploy
+    if (tx.contractName === "MockERC20" && demoCollateral === null) {
+      demoCollateral = (tx.contractAddress ?? ZERO).toLowerCase();
+    }
   }
+  // collateral precedence: explicit --collateral > the deployed demo token > WXDAI.
+  const collateral = (opts.collateral ?? demoCollateral ?? WXDAI).toLowerCase();
   return {
     chainId: opts.chainId ?? broadcast.chain ?? 10200,
     network: opts.network ?? "chiado",
     contracts,
-    collateral: (opts.collateral ?? "0xe91D153E0b41518A2Ce8Dd3D7944Fa863463a97d").toLowerCase(),
+    collateral,
     collateralDecimals: opts.collateralDecimals ?? 18,
     tables: opts.tables ?? {
       markets: "markets", predictions: "predictions", positions: "positions",

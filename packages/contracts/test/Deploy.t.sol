@@ -11,6 +11,7 @@ import {ScalarChainlinkAdapter} from "../src/oracle/ScalarChainlinkAdapter.sol";
 import {CategoricalChainlinkAdapter} from "../src/oracle/CategoricalChainlinkAdapter.sol";
 import {ForgeGovernor} from "../src/ForgeGovernor.sol";
 import {Treasury} from "../src/Treasury.sol";
+import {MockERC20} from "../src/mocks/MockERC20.sol";
 
 /// @notice Runs the real deployment script under `forge test` (the broadcast
 ///         cheatcode shims no-op outside `forge script`) and asserts the whole
@@ -83,6 +84,15 @@ contract DeployTest is MiniTest {
         assertEq(MarketEngine(deploy.binaryEngine()).admin(), address(this), "binary admin");
         assertEq(ScalarMarketEngine(deploy.scalarEngine()).admin(), address(this), "scalar admin");
         assertEq(CategoricalMarketEngine(deploy.categoricalEngine()).admin(), address(this), "cat admin");
+    }
+
+    /// With no COLLATERAL env set (a testnet/demo deploy), a freely-mintable test
+    /// token is deployed as the collateral, so anyone can faucet funds and trade.
+    function test_demoCollateralIsDeployedAndMintable() public {
+        MockERC20 col = MockERC20(deploy.collateral());
+        assertTrue(address(col).code.length > 0, "collateral is a real contract");
+        col.mint(address(this), 1_000e18); // public faucet
+        assertEq(col.balanceOf(address(this)), 1_000e18, "minted demo collateral");
     }
 
     /// The three engines are distinct contracts (no accidental aliasing).

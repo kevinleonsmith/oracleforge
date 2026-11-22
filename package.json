@@ -32,6 +32,8 @@
     "devnet": "cd integration/anvil && python3 devnet.py",
     "devnet:scalar": "cd integration/anvil && python3 scalar_devnet.py",
     "devnet:categorical": "cd integration/anvil && python3 categorical_devnet.py",
+    "deploy:chiado": "cd packages/contracts && forge script script/Deploy.s.sol:Deploy --broadcast --rpc-url chiado --private-key $DEPLOYER_PK",
+    "extract:chiado": "cd packages/frontend && node scripts/extract-addresses.mjs ../contracts/broadcast/Deploy.s.sol/10200/run-latest.json deployments/chiado.json --network chiado",
     "test": "npm run test:contracts && npm run test:ai && npm run test:cartesi && npm run test:relayer && npm run test:resolver && npm run test:archiver && npm run test:frontend && npm run test:inference && npm run test:lit && npm run test:e2e"
   },
   "engines": { "node": ">=20" }

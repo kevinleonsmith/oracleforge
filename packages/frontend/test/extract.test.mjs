@@ -41,6 +41,27 @@ test("extracts the ForgeGovernor address", () => {
   assert.equal(book.contracts.ForgeGovernor, "0x3330000000000000000000000000000000000009");
 });
 
+test("uses a self-deployed MockERC20 as the collateral (testnet/demo)", () => {
+  const demo = {
+    transactions: [
+      { transactionType: "CREATE", contractName: "MockERC20", contractAddress: "0xCAFe000000000000000000000000000000000001" },
+      { transactionType: "CREATE", contractName: "MarketEngine", contractAddress: "0xDDd0000000000000000000000000000000000004" },
+    ],
+  };
+  // no --collateral opt -> the deployed demo token is the collateral
+  assert.equal(extractAddresses(demo).collateral, "0xcafe000000000000000000000000000000000001");
+  // an explicit --collateral still wins (production: real WXDAI)
+  assert.equal(
+    extractAddresses(demo, { collateral: "0xBEEF000000000000000000000000000000000002" }).collateral,
+    "0xbeef000000000000000000000000000000000002",
+  );
+});
+
+test("falls back to WXDAI when there is no demo token and no opt", () => {
+  const book = extractAddresses(BROADCAST); // BROADCAST has no MockERC20
+  assert.equal(book.collateral, "0xe91d153e0b41518a2ce8dd3d7944fa863463a97d");
+});
+
 test("missing contracts stay zero; CALLs ignored", () => {
   const book = extractAddresses({ transactions: [
     { transactionType: "CREATE", contractName: "MarketEngine", contractAddress: "0x1234000000000000000000000000000000000000" },
