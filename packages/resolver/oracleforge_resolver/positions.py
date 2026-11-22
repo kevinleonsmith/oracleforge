@@ -76,6 +76,40 @@ class PositionRow:
         return f"INSERT INTO {table} ({', '.join(cols)}) VALUES ({', '.join(vals)});"
 
 
+@dataclass
+class ClaimEvent:
+    """A decoded ``Claimed`` log: an account withdrew its winnings/refund for a
+    market. In these engines a claim settles the account's whole stake at once, so
+    it marks every one of that account's positions in the market as claimed."""
+
+    market_id: str
+    account: str
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> "ClaimEvent":
+        return cls(market_id=str(d["market_id"]), account=str(d["account"]))
+
+
+@dataclass
+class PositionClaimUpdate:
+    """Flip ``claimed`` on an account's positions once it has claimed — the
+    positions-side catalog transition, mirroring the markets status UPDATEs. Without
+    it the index would show a settled, withdrawn position as still open (unclaimed)."""
+
+    market_id: str
+    account: str
+
+    @classmethod
+    def from_event(cls, e: ClaimEvent) -> "PositionClaimUpdate":
+        return cls(market_id=e.market_id, account=e.account)
+
+    def sql(self, table: str = DEFAULT_POSITIONS_TABLE) -> str:
+        return (
+            f"UPDATE {table} SET claimed=1 "
+            f"WHERE market_id={_q(self.market_id)} AND account={_q(self.account)};"
+        )
+
+
 class PositionEventSource(Protocol):
     def events(self) -> List[PositionEvent]: ...
 
@@ -125,3 +159,12 @@ class PositionIndexer:
             self.mutator.mutate(row.sql(self.table))
         logger.info("indexed %d position(s)", len(self.rows))
         return self.rows
+
+    def index_claims(self, claims: List[ClaimEvent]) -> List[PositionClaimUpdate]:
+        """Flip ``claimed`` for each Claimed event — the withdrawal transition that
+        follows a trade's lifecycle, emitted through the same mutator seam."""
+        updates = [PositionClaimUpdate.from_event(c) for c in claims]
+        for u in updates:
+            self.mutator.mutate(u.sql(self.table))
+        logger.info("marked %d claim(s)", len(updates))
+        return updates

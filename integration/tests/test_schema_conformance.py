@@ -38,7 +38,12 @@ from oracleforge_resolver.archive import (  # noqa: E402
     OracleReportRow,
 )
 from oracleforge_resolver.models import OracleReport  # noqa: E402
-from oracleforge_resolver.positions import PositionEvent, PositionRow  # noqa: E402
+from oracleforge_resolver.positions import (  # noqa: E402
+    ClaimEvent,
+    PositionClaimUpdate,
+    PositionEvent,
+    PositionRow,
+)
 
 NOW = 1_737_010_000
 CHAIN = 10200
@@ -187,6 +192,12 @@ class PositionsConforms(unittest.TestCase):
         self.assertEqual(r["side"], 1)
         self.assertEqual(r["amount"], str(10 ** 24))  # uint256 round-trips as a string
         self.assertEqual(r["claimed"], 0)             # schema/default
+
+        # a claim flips claimed to 1 for that account's positions in the market
+        self.con.execute(
+            PositionClaimUpdate.from_event(ClaimEvent("0xMKT", "0xAlice")).sql("positions"))
+        r2 = self.con.execute("SELECT claimed FROM positions WHERE market_id='0xMKT'").fetchone()
+        self.assertEqual(r2["claimed"], 1)
 
 
 class PredictionsConforms(unittest.TestCase):

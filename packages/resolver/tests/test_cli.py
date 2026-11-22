@@ -45,12 +45,13 @@ class TablelandOutputTests(unittest.TestCase):
 
 
 class PositionsFlagTests(unittest.TestCase):
-    def test_positions_dry_run_prints_position_inserts(self):
+    def test_positions_dry_run_prints_position_inserts_and_a_claim(self):
         out = _run("--dry-run", "--positions")
         self.assertIn("positions -> Tableland", out)
         self.assertIn("INSERT INTO positions", out)
         self.assertIn("'0xAlice'", out)
-        self.assertIn("indexed 2 position(s)", out)
+        self.assertIn("UPDATE positions SET claimed=1", out)  # the withdrawal transition
+        self.assertIn("indexed 2 position(s), 1 claim(s)", out)
 
 
 if __name__ == "__main__":

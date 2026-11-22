@@ -94,7 +94,7 @@ def main(argv=None) -> int:
     if args.positions and not args.watch:
         import time as _t
         from .archive import LogTablelandMutator
-        from .positions import PositionEvent, PositionIndexer, StubPositionEventSource
+        from .positions import ClaimEvent, PositionEvent, PositionIndexer, StubPositionEventSource
 
         now = int(_t.time())
         events = [
@@ -104,8 +104,11 @@ def main(argv=None) -> int:
                                      "amount": 400_000000, "tx_hash": "0xt2", "created_at": now}),
         ]
         mutator = LogTablelandMutator()
-        rows = PositionIndexer(StubPositionEventSource(events), mutator=mutator).index()
-        print(f"indexed {len(rows)} position(s)")
+        indexer = PositionIndexer(StubPositionEventSource(events), mutator=mutator)
+        rows = indexer.index()
+        # a sample claim then flips one account's position to claimed.
+        claims = indexer.index_claims([ClaimEvent("0xA7F3", "0xAlice")])
+        print(f"indexed {len(rows)} position(s), {len(claims)} claim(s)")
         print("\npositions -> Tableland (would sign & send):")
         for stmt in mutator.statements:
             print(f"  {stmt}")

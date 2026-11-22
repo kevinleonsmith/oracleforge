@@ -9,6 +9,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(_HERE, "..")))
 from oracleforge_resolver.archive import LogTablelandMutator  # noqa: E402
 from oracleforge_resolver.positions import (  # noqa: E402
     ChainPositionEventSource,
+    ClaimEvent,
+    PositionClaimUpdate,
     PositionEvent,
     PositionIndexer,
     PositionRow,
@@ -82,6 +84,29 @@ class PositionIndexerTests(unittest.TestCase):
         src = ChainPositionEventSource("http://rpc", "0xEngine", 100)
         with self.assertRaises(NotImplementedError):
             src.events()
+
+
+class PositionClaimTests(unittest.TestCase):
+    def test_claim_update_sql_targets_account_and_market(self):
+        u = PositionClaimUpdate.from_event(ClaimEvent.from_dict({"market_id": "0xabc", "account": "0xAlice"}))
+        self.assertEqual(
+            u.sql(),
+            "UPDATE positions SET claimed=1 WHERE market_id='0xabc' AND account='0xAlice';",
+        )
+
+    def test_claim_update_escapes_quotes(self):
+        u = PositionClaimUpdate("0x'; DROP", "0xAlice")
+        self.assertIn("market_id='0x''; DROP'", u.sql())
+
+    def test_indexer_index_claims_emits_updates(self):
+        idx = PositionIndexer(StubPositionEventSource([]))
+        updates = idx.index_claims([
+            ClaimEvent("0xabc", "0xAlice"),
+            ClaimEvent("0xabc", "0xBob"),
+        ])
+        self.assertEqual(len(updates), 2)
+        self.assertEqual(len(idx.mutator.statements), 2)
+        self.assertTrue(all("SET claimed=1" in s for s in idx.mutator.statements))
 
 
 if __name__ == "__main__":

@@ -45,7 +45,7 @@ a benign error, not a crash.
 | `chain.py` | `GnosisResolver` (web3) · `DryRunResolver` (no network) — shared `resolve()`/`finalize()` drive all three engines |
 | `archive.py` | `LogReportSink` (default) · `TablelandReportSink` → `oracle_reports` INSERT via a `TablelandMutator` (`LogTablelandMutator` dry-run · `RegistryTablelandMutator` signed) |
 | `watcher.py` | orchestration: `Watcher` (binary) · `ScalarWatcher` (range) · `CategoricalWatcher` (N-outcome), each `tick()` once / `watch()` loops |
-| `positions.py` | `PositionIndexer`: `PositionTaken` events → `positions` INSERTs via the same mutator seam (stub source dry-run · `ChainPositionEventSource` live), filling the trade-time index table |
+| `positions.py` | `PositionIndexer`: `PositionTaken` events → `positions` INSERTs and `Claimed` events → `claimed=1` UPDATEs via the same mutator seam (stub source dry-run · `ChainPositionEventSource` live), indexing a position's whole taken→claimed lifecycle |
 
 ## Scalar & categorical markets
 
