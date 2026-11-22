@@ -7,8 +7,10 @@ import {
   sqlActiveProposals,
   sqlScalarMarkets,
   sqlCategoricalMarkets,
+  sqlPositions,
   mapMarketRow,
   mapProposalRow,
+  mapPositionRow,
   mapScalarMarketRow,
   mapCategoricalMarketRow,
   computeStats,
@@ -116,6 +118,35 @@ test("computeStats sums pools (18-decimals) and averages prob", () => {
 
 test("computeStats handles empty", () => {
   assert.deepEqual(computeStats([], 18), { activeMarkets: 0, tvlTokens: 0, avgProbBps: 0 });
+});
+
+test("sqlPositions filters by account and orders by recency", () => {
+  const q = sqlPositions("positions_10200_7", "0xYou", 20);
+  assert.match(q, /FROM positions_10200_7/);
+  assert.match(q, /WHERE account='0xYou'/);
+  assert.match(q, /ORDER BY created_at DESC LIMIT 20/);
+});
+
+test("mapPositionRow maps side/amount/claimed from the row", () => {
+  const p = mapPositionRow({
+    market_id: "0xa7f3", account: "0xYou", side: 1,
+    amount: "600000000", claimed: 1, created_at: 1737000000,
+  });
+  assert.equal(p.marketId, "0xa7f3");
+  assert.equal(p.account, "0xYou");
+  assert.equal(p.side, 1);
+  assert.equal(p.amount, "600000000");
+  assert.equal(p.claimed, true); // claimed=1 -> true
+
+  const open = mapPositionRow({ market_id: "0x1", account: "0xYou", side: 0, amount: "5", claimed: 0 });
+  assert.equal(open.claimed, false); // claimed=0 -> false
+  assert.equal(open.side, 0);
+});
+
+test("mapPositionRow keeps a categorical outcome index as the side", () => {
+  // side generalises beyond YES/NO: a categorical stake on outcome 2 rides through
+  const p = mapPositionRow({ market_id: "0xc", account: "0xYou", side: 2, amount: "10", claimed: 0 });
+  assert.equal(p.side, 2);
 });
 
 test("computeProtocolStats aggregates TVL + count across all three market types", () => {

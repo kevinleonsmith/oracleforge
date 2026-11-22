@@ -2,7 +2,7 @@
 // current on-chain pools/status (best-effort). Same function signatures as the
 // mock client, so the page is unchanged. Any failure degrades to the indexed
 // data (or an empty list) instead of crashing the page.
-import type { Market, Prediction, GovernanceProposal } from "@oracleforge/shared/types";
+import type { Market, Prediction, GovernanceProposal, Position } from "@oracleforge/shared/types";
 import type { ScalarMarketData } from "@/components/ScalarMarketCard";
 import type { CategoricalMarketData } from "@/components/CategoricalMarketCard";
 import { deployment } from "./contracts";
@@ -11,9 +11,9 @@ import { hydrateScalar, hydrateCategorical } from "./marketHydrate";
 import { getScalarMarkets as mockScalarMarkets, getCategoricalMarkets as mockCategoricalMarkets } from "./mockApi";
 import { queryTableland } from "./tableland";
 import {
-  sqlOpenMarkets, sqlLatestPrediction, sqlConfidence, sqlActiveProposals,
+  sqlOpenMarkets, sqlLatestPrediction, sqlConfidence, sqlActiveProposals, sqlPositions,
   sqlScalarMarkets, sqlCategoricalMarkets,
-  mapMarketRow, mapPredictionRow, mapProposalRow,
+  mapMarketRow, mapPredictionRow, mapProposalRow, mapPositionRow,
   mapScalarMarketRow, mapCategoricalMarketRow, computeProtocolStats,
 } from "./queries";
 
@@ -47,6 +47,15 @@ export async function getPrediction(marketId: string): Promise<Prediction | null
 export async function getActiveProposals(): Promise<GovernanceProposal[]> {
   const rows = await queryTableland(sqlActiveProposals(T.governance_proposals));
   return rows.map(mapProposalRow);
+}
+
+export async function getPositions(account: string): Promise<Position[]> {
+  try {
+    const rows = await queryTableland(sqlPositions(T.positions ?? "positions", account));
+    return rows.map(mapPositionRow);
+  } catch {
+    return []; // index unavailable -> no positions rather than a crash
+  }
 }
 
 // Scalar + categorical markets now come from the Tableland index (the relayer

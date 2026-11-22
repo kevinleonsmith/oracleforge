@@ -35,7 +35,7 @@ export function extractAddresses(broadcast, opts = {}) {
     collateral: (opts.collateral ?? "0xe91D153E0b41518A2Ce8Dd3D7944Fa863463a97d").toLowerCase(),
     collateralDecimals: opts.collateralDecimals ?? 18,
     tables: opts.tables ?? {
-      markets: "markets", predictions: "predictions",
+      markets: "markets", predictions: "predictions", positions: "positions",
       confidence_scores: "confidence_scores", governance_proposals: "governance_proposals",
     },
   };

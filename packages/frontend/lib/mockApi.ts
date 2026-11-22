@@ -1,5 +1,5 @@
 // Mock data client — the design-time data set. Same signatures as chainApi.ts.
-import type { Market, Prediction, GovernanceProposal } from "@oracleforge/shared/types";
+import type { Market, Prediction, GovernanceProposal, Position } from "@oracleforge/shared/types";
 import type { ScalarMarketData } from "@/components/ScalarMarketCard";
 import type { CategoricalMarketData } from "@/components/CategoricalMarketCard";
 
@@ -93,6 +93,13 @@ export async function getPrediction(marketId: string): Promise<Prediction | null
 }
 export async function getActiveProposals(): Promise<GovernanceProposal[]> {
   return delay(MOCK_PROPOSALS);
+}
+const MOCK_POSITIONS: Position[] = [
+  { marketId: "0xa7f3", account: "0xYou", side: 1, amount: "600000000", claimed: false },
+  { marketId: "0x9d11", account: "0xYou", side: 0, amount: "250000000", claimed: true },
+];
+export async function getPositions(_account: string): Promise<Position[]> {
+  return delay(MOCK_POSITIONS);
 }
 export async function getScalarMarkets(): Promise<ScalarMarketData[]> {
   return delay(MOCK_SCALAR_MARKETS);

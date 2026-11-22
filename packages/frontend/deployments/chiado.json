@@ -18,6 +18,7 @@
   "tables": {
     "markets": "markets",
     "predictions": "predictions",
+    "positions": "positions",
     "confidence_scores": "confidence_scores",
     "governance_proposals": "governance_proposals"
   }

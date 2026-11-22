@@ -1,6 +1,6 @@
 // Tableland SQL builders + row -> domain mappers. Pure (no network, no enums),
 // unit-tested with `node --test`. Column names match packages/shared/tableland/schema.sql.
-import type { Market, Prediction, GovernanceProposal } from "@oracleforge/shared/types";
+import type { Market, Prediction, GovernanceProposal, Position } from "@oracleforge/shared/types";
 import type { ScalarMarketData } from "@/components/ScalarMarketCard";
 import type { CategoricalMarketData } from "@/components/CategoricalMarketCard";
 
@@ -56,6 +56,14 @@ export function sqlLatestPrediction(table: string, marketId: string): string {
 
 export function sqlConfidence(table: string, predictionId: number): string {
   return `SELECT source, score_bps FROM ${table} WHERE prediction_id=${predictionId}`;
+}
+
+/** An account's positions (most recent first), as the positions indexer writes them. */
+export function sqlPositions(table: string, account: string, limit = 100): string {
+  return (
+    `SELECT market_id, account, side, amount, claimed, tx_hash, created_at ` +
+    `FROM ${table} WHERE account='${account}' ORDER BY created_at DESC LIMIT ${limit}`
+  );
 }
 
 export function sqlActiveProposals(table: string): string {
@@ -130,6 +138,19 @@ export function mapPredictionRow(r: Row, confidence: Record<string, number> = {}
     inputHash: s(r.input_hash),
     computedAt: n(r.computed_at),
     confidenceBySource: confidence,
+  };
+}
+
+/** A positions row -> the shared Position. `side` is the engine-generic integer
+ *  (binary YES/NO, scalar LONG/SHORT, categorical outcome index); `claimed` is a
+ *  0/1 flag the claim transition flips. */
+export function mapPositionRow(r: Row): Position {
+  return {
+    marketId: s(r.market_id),
+    account: s(r.account),
+    side: n(r.side) as Position["side"],
+    amount: s(r.amount, "0"),
+    claimed: n(r.claimed) === 1,
   };
 }
 

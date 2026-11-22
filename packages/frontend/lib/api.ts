@@ -18,3 +18,4 @@ export const getActiveProposals = impl.getActiveProposals;
 export const getProtocolStats = impl.getProtocolStats;
 export const getScalarMarkets = impl.getScalarMarkets;
 export const getCategoricalMarkets = impl.getCategoricalMarkets;
+export const getPositions = impl.getPositions;
